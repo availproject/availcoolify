@@ -255,8 +255,13 @@ class GlobalSearch extends Component
     {
         // Try to get from Redis cache first
         $cacheKey = self::getCacheKey(auth()->user()->currentTeam()->id);
+        // Avail: a guest sees only their projects, so their results are cached on their own.
+        $isGuest = availIsGuest();
+        if ($isGuest) {
+            $cacheKey .= '_guest_'.auth()->id();
+        }
 
-        $resources = Cache::remember($cacheKey, 300, function () {
+        $resources = Cache::remember($cacheKey, $isGuest ? 30 : 300, function () use ($isGuest) {
             $items = collect();
             $team = auth()->user()->currentTeam();
 
@@ -542,6 +547,7 @@ class GlobalSearch extends Component
 
             // Get all servers
             $servers = Server::ownedByCurrentTeam()
+                ->when($isGuest, fn ($query) => $query->whereRaw('1 = 0'))
                 ->get()
                 ->map(function ($server) {
                     return [
