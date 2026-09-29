@@ -36,7 +36,8 @@ class ActiveDeployments extends Component
 
         $baseQuery = ApplicationDeploymentQueue::query()
             ->with(['application.environment.project'])
-            ->ownedByTeam(currentTeam()->id);
+            ->ownedByTeam(currentTeam()->id)
+            ->when(availIsGuest(), fn ($query) => $query->whereIn('application_id', \App\Models\Application::ownedByCurrentTeam()->pluck('applications.id')));
 
         $this->activeDeployments = (clone $baseQuery)
             ->whereIn('status', [
@@ -50,7 +51,7 @@ class ActiveDeployments extends Component
 
         // Avail: only the latest completed deployment of each application.
         $latestPerApplication = ApplicationDeploymentQueue::query()
-            ->whereIn('server_id', $serverIds)
+            ->ownedByTeam(currentTeam()->id)
             ->whereNotIn('status', [
                 ApplicationDeploymentStatus::IN_PROGRESS->value,
                 ApplicationDeploymentStatus::QUEUED->value,

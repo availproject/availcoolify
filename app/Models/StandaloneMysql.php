@@ -117,7 +117,7 @@ class StandaloneMysql extends BaseModel
      */
     public static function ownedByCurrentTeam()
     {
-        return StandaloneMysql::whereRelation('environment.project.team', 'id', currentTeam()->id)->orderBy('name');
+        return availGuestScope(StandaloneMysql::whereRelation('environment.project.team', 'id', currentTeam()->id))->orderBy('name');
     }
 
     /**
