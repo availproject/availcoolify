@@ -93,6 +93,8 @@
                     <span class="menu-item-label" :class="collapsed && 'lg:hidden'">Projects</span>
                 </a>
             </li>
+            {{-- Avail: guests only get the dashboard and their projects. --}}
+            @unless (availIsGuest())
             <li>
                 <a title="Analytics" {{ wireNavigate() }}
                     class="{{ request()->is('analytics') ? 'menu-item menu-item-active' : 'menu-item' }}"
@@ -223,6 +225,7 @@
                     </a>
                 </li>
             @endif
+            @endunless
             <li class="flex-1" aria-hidden="true"></li>
         @endif
         @if (auth()->id() === 0 && (isCloud() || isDev()))
