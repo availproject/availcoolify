@@ -139,7 +139,7 @@ class HealthChecks extends Component
 
     public function instantSave()
     {
-        $this->authorize('update', $this->resource);
+        $this->authorize($this->resource instanceof \App\Models\Application ? 'configure' : 'update', $this->resource);
         $this->validate();
 
         // Sync component properties to model
@@ -166,7 +166,7 @@ class HealthChecks extends Component
     public function submit()
     {
         try {
-            $this->authorize('update', $this->resource);
+            $this->authorize($this->resource instanceof \App\Models\Application ? 'configure' : 'update', $this->resource);
             $this->validate();
 
             // Sync component properties to model
@@ -196,7 +196,7 @@ class HealthChecks extends Component
     public function toggleHealthcheck()
     {
         try {
-            $this->authorize('update', $this->resource);
+            $this->authorize($this->resource instanceof \App\Models\Application ? 'configure' : 'update', $this->resource);
             $wasEnabled = $this->healthCheckEnabled;
             $this->healthCheckEnabled = ! $this->healthCheckEnabled;
 
