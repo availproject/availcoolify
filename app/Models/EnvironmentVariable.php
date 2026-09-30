@@ -147,6 +147,13 @@ class EnvironmentVariable extends BaseModel
             if ($environmentVariable->preserve_compose_null && $environmentVariable->isDirty('value') && $environmentVariable->value !== null) {
                 $environmentVariable->preserve_compose_null = false;
             }
+            // Avail: only admins may pull shared (team/project/environment/server) secrets into a resource.
+            $user = auth()->user();
+            if ($user && $environmentVariable->isDirty('value')
+                && availReferencesSharedVariables($environmentVariable->value)
+                && ! availIsAdminOfResource($user, $environmentVariable->resourceable)) {
+                throw new \RuntimeException(availSharedReferenceError());
+            }
             $environmentVariable->updateIsShared();
         });
     }
