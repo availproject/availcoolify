@@ -140,7 +140,8 @@ class ApplicationPolicy
     {
         $teamId = $this->getTeamId($application);
 
-        return $teamId !== null && $user->isAdminOfTeam($teamId);
+        // Avail: members manage the environment variables of applications they created.
+        return $teamId !== null && ($user->isAdminOfTeam($teamId) || availOwnsApplication($user, $application));
     }
 
     private function getTeamId(Application $application): ?int
