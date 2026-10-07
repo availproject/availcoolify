@@ -242,8 +242,7 @@ class All extends Component
 
     private function nullLockedValues($envs)
     {
-        // Avail: also hide from members on resources they did not create (availHidesEnvValues).
-        $hideValues = availHidesEnvValues($this->resource) || ! $this->canViewEnvironmentValues();
+        $hideValues = ! $this->canViewEnvironmentValues();
 
         $envs->each(function ($env) use ($hideValues) {
             if ($env->is_shown_once || $hideValues) {
@@ -909,8 +908,7 @@ class All extends Component
 
     private function formatEnvironmentVariables($variables)
     {
-        // Avail: also hide from members on resources they did not create (availHidesEnvValues).
-        $hideValues = availHidesEnvValues($this->resource) || ! $this->canViewEnvironmentValues();
+        $hideValues = ! $this->canViewEnvironmentValues();
 
         return $variables
             ->reject(fn ($item): bool => $this->isProtectedEnvironmentVariable($item->key))
