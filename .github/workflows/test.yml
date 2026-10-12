@@ -73,6 +73,7 @@ jobs:
           php -l scripts/prod/configure-instance.php
           php -l scripts/prod/localhost-public-key.php
           php -l scripts/prod/worker-key.php
+          php -l scripts/prod/localhost-proxy.php
           docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.12 .github/workflows/release.yml .github/workflows/test.yml
           # The log shipper's config, with the Alloy version the VMs run: a syntax error here would otherwise
           # surface only as a failed deploy (deploy-platform.sh: "avail-log-shipper is not running").

@@ -25,8 +25,7 @@ What the pipeline enforces on every VM:
 - `sshd` listens on the one Coolify port only; port 22 is closed. Key-only, no passwords.
 - The only keys in root's `authorized_keys` are Coolify's and the break-glass key (`PROD_BREAKGLASS_SSH_PUBKEY`; while
   that variable is unset, the break-glass key is removed like any other). Anything else (a key the provider injected when the VM was
-  created, someone's laptop key) is listed by fingerprint, backed up next to the file, and removed. Set the
-  repository variable `PROD_KEEP_SSH_KEYS=true` to only list them instead.
+  created, someone's laptop key) is listed by fingerprint, backed up next to the file, and removed.
 - Network: the provider firewall keeps SSH off the internet. On the **control plane** the port can stay closed
   entirely, because Coolify reaches its own host over the Docker bridge. On **app servers** it is open to the
   control plane's IP only.
@@ -34,15 +33,13 @@ What the pipeline enforces on every VM:
 | Trigger | What runs |
 | --- | --- |
 | Pull request to `avail` (`test.yml`) | Test suite minus `tests/avail-ci-skip.txt`, then shellcheck, `php -l`, actionlint and `alloy fmt`. No AWS, no secrets. Branch protection on `avail` requires it; fork runs by outside contributors wait for a maintainer's approval |
-| Push to `avail` (`release.yml`) | Build `docker/production/Dockerfile` (no tests: the pull request already passed them) and push `<DOCR_REGISTRY>/availcoolify:custom-<sha9>` (label `coolify.managed=true`) |
-| Push to `avail`, with `PROD_AUTO_DEPLOY=true` | After the build, a production **deploy** of that image, waiting for the approval on the `production` environment |
-| Manual: **build** | Same as a push, never deploys |
+| Push to `avail` (`release.yml`) | Build `docker/production/Dockerfile` (no tests: the pull request already passed them) and push `registry.digitalocean.com/availj/availcoolify:custom-<sha9>` (label `coolify.managed=true`) |
 | Manual: **deploy** | Build HEAD, pull it on the control plane, `deploy-custom.sh`, configure the instance, log collector, smoke checks, Slack |
 | Manual: **provision** | From enrolled but bare VMs: Docker, SSH for Coolify, `/data/coolify` and `.env`, then everything in deploy |
 | Manual: **rollback** | Redeploy an earlier image (`image_tag`, for example `custom-06e5e21b9`). Compose files and `deploy-custom.sh` come from the commit that image was built from |
 
-`deploy`, `provision` and `rollback` run in the GitHub environment **production**. Add required reviewers
-there; without them, enabling `PROD_AUTO_DEPLOY` would deploy every push to production unattended.
+`deploy`, `provision` and `rollback` run in the GitHub environment **production**, which requires a reviewer's
+approval. A push to `avail` only builds the image; production changes only through a manual run.
 
 ```
 push to avail ─▶ image job ──OIDC──▶ AWS build role ──▶ SSM: DOCR_PUSH_TOKEN ─▶ push to DigitalOcean registry
@@ -182,8 +179,6 @@ trust `pull_request` tokens, so they cannot reach AWS or Teleport. The workflow 
 | `AWS_BUILD_ROLE_ARN` | `arn:aws:iam::123456789012:role/avail-coolify-build` | build. While unset, pushes run the tests only |
 | `AWS_ROLE_ARN` | `arn:aws:iam::123456789012:role/avail-coolify-release` | release |
 | `AWS_REGION` | `eu-central-1` | both |
-| `SSM_PATH_PREFIX` | default `/avail/coolify/prod/` | both |
-| `DOCR_REGISTRY` | default `registry.digitalocean.com/availj` | build, release |
 | `TELEPORT_PROXY` | `teleport.example.com:443` | release |
 | `TELEPORT_BOT_TOKEN` | `availcoolify-ci` | release |
 | `PROD_CONTROL_PLANE_NODE` | Teleport node name of the control plane | release |
@@ -195,8 +190,6 @@ trust `pull_request` tokens, so they cannot reach AWS or Teleport. The workflow 
 | `PROD_AUTO_JOIN_DOMAINS` | default `availproject.org` | provision |
 | `PROD_DB_SSLMODE` | default `require` | provision: used only when `DATABASE_URL` has no `sslmode` |
 | `PROD_BREAKGLASS_SSH_PUBKEY` | `ssh-ed25519 AAAA… avail-breakinglass` (a public key, not a secret) | provision, deploy: kept in root's `authorized_keys` on every VM next to Coolify's key |
-| `PROD_KEEP_SSH_KEYS` | `true` to keep other SSH keys on the VMs (default: they are removed) | provision, deploy |
-| `PROD_AUTO_DEPLOY` | `true` to deploy every push (after approval) | release |
 
 ### 5. Provider (not automated)
 
@@ -227,9 +220,8 @@ are proxied.
 0. Merge `feature/release-ci` into `avail` once it is reviewed and the settings above exist. **Run workflow** only works for a
    workflow that is on the default branch (`avail`), and the AWS build role, the Teleport token and the `production`
    environment all accept `avail` only, so the pipeline cannot be tried from the feature branch.
-1. Run **provision** on throwaway VMs first, approve it, check the summary, then do it again on the real ones. The throwaway VMs
-   have no DNS record, so give the run the input **smoke_ip** (the throwaway control plane's public IP): the smoke checks then
-   pin the dashboard's host name to that IP and skip TLS verification, as there is no Let's Encrypt certificate without DNS.
+1. Create the two DNS records (setup step 6), then run **provision** and approve it. The smoke checks go through DNS and
+   Cloudflare, so the records must exist first.
 2. Sign in once with `PROD_ROOT_USER_EMAIL`.
 3. App servers, without anyone touching a key: every deploy runs `worker-key.php` in the container, which makes Coolify's
    key `avail-workers` (ed25519, team 0) the first time and returns the same key after that. The pipeline installs its public
@@ -275,11 +267,12 @@ line for the list.
 | `bootstrap-host.sh` | each VM | refuses to run unless the Teleport agent is running; key-only sshd on the Coolify port only (22 closed), `fail2ban`, `MaxStartups 30:60:200`, unattended upgrades, swap, Docker with 10m×3 log rotation. Control plane also: `/data/coolify` layout, the `coolify` network, Coolify's localhost key (made the only SSH key), and `.env` with `DATABASE_URL` (an existing `.env` and its `APP_KEY` are never overwritten) |
 | `worker-key.php` | inside the `coolify` container | prints the public half of Coolify's app-server key `avail-workers`, creating it on the first run; the deploy step installs it on every app server |
 | `localhost-public-key.php` | inside the `coolify` container | prints the public half of Coolify's "localhost's key" from the database; the deploy step makes it the control plane's only SSH key, so re-runs and a VM rebuilt from an existing database stay consistent |
+| `localhost-proxy.php` | inside the `coolify` container | validates Coolify's own server and starts its proxy when it is not running (first-boot validation is never retried otherwise, and the dashboard stays down) |
 | `ssh-authorized-keys.sh` | each VM | makes one public key the only key in `authorized_keys`: adds it, lists the others by fingerprint and, while Teleport is running, backs the file up and removes them |
 | `deploy-release.sh` | control plane | checks the managed DB is reachable, records the previous image, pulls with a throw-away Docker config, runs `scripts/deploy-custom.sh <image>` |
 | `deploy-platform.sh` | each VM | starts the Alloy shipper (`docker/avail-otel`: container logs, host and container metrics) with the SigNoz endpoint and the host name |
 | `configure-instance.php` | inside the `coolify` container | auto-update off, sponsorship popup off, registration on, force HTTPS, instance URL, daily Docker cleanup, wildcard domain, SSH port of the local server, Clerk settings, Cloudflare ranges as Traefik trusted IPs. `DRY_RUN=1` shows changes without saving |
-| `smoke-check.sh` | the runner | health, login page, HTTP→HTTPS, websocket 101, no password form. With `smoke_ip` it pins the host name to that IP |
+| `smoke-check.sh` | the runner | health, login page, HTTP→HTTPS, websocket 101, no password form |
 | `notify-slack.sh` | the runner | posts the result to Slack; never fails the job |
 
 `scripts/deploy-custom.sh` disables the bundled `postgres` service whenever `.env` has a `DATABASE_URL` (or a
