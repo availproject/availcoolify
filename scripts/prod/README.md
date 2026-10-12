@@ -33,8 +33,8 @@ What the pipeline enforces on every VM:
 
 | Trigger | What runs |
 | --- | --- |
-| Pull request to `avail` | Test suite minus `tests/avail-ci-skip.txt`, then shellcheck, `php -l` and actionlint. No AWS, no secrets |
-| Push to `avail` | The same tests, then build `docker/production/Dockerfile` and push `<DOCR_REGISTRY>/availcoolify:custom-<sha9>` (label `coolify.managed=true`) |
+| Pull request to `avail` (`test.yml`) | Test suite minus `tests/avail-ci-skip.txt`, then shellcheck, `php -l`, actionlint and `alloy fmt`. No AWS, no secrets. Branch protection on `avail` requires it; fork runs by outside contributors wait for a maintainer's approval |
+| Push to `avail` (`release.yml`) | Build `docker/production/Dockerfile` (no tests: the pull request already passed them) and push `<DOCR_REGISTRY>/availcoolify:custom-<sha9>` (label `coolify.managed=true`) |
 | Push to `avail`, with `PROD_AUTO_DEPLOY=true` | After the build, a production **deploy** of that image, waiting for the approval on the `production` environment |
 | Manual: **build** | Same as a push, never deploys |
 | Manual: **deploy** | Build HEAD, pull it on the control plane, `deploy-custom.sh`, configure the instance, log collector, smoke checks, Slack |
@@ -45,7 +45,7 @@ What the pipeline enforces on every VM:
 there; without them, enabling `PROD_AUTO_DEPLOY` would deploy every push to production unattended.
 
 ```
-push to avail ─▶ test ─▶ image job ──OIDC──▶ AWS build role ──▶ SSM: DOCR_PUSH_TOKEN ─▶ push to DigitalOcean registry
+push to avail ─▶ image job ──OIDC──▶ AWS build role ──▶ SSM: DOCR_PUSH_TOKEN ─▶ push to DigitalOcean registry
                                   approval (environment: production)
                                           │
 release job ──OIDC──▶ AWS release role ──▶ SSM: every secret under the prefix
