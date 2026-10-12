@@ -68,6 +68,13 @@ require_teleport() {
 
 configure_ssh() {
     local ports
+    # A droplet created without an SSH key gets an expired root password (change forced at first login).
+    # sshd's PAM account check then refuses even key logins ("Your password has expired"), which locks
+    # Coolify out. Clear the expiry; the password itself stays locked.
+    if chage -l root 2>/dev/null | grep -q 'must be changed'; then
+        log "SSH: clearing the provider's forced root password change"
+        chage -d "$(date +%F)" -M -1 root
+    fi
     if teleport_active; then
         # sshd only has to serve Coolify, on the one port.
         ports="$SSH_PORT"
