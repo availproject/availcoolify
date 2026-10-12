@@ -296,11 +296,20 @@ jobs:
           version: auto
           proxy: ${{ vars.TELEPORT_PROXY }}
 
+      # tbot directly, the way the nexus deploy (availproject/ansible) joins this cluster:
+      # teleport-actions/auth@v2 passes no join method, and tbot 17.7 refuses to start without one.
       # Leaves TELEPORT_IDENTITY_FILE in the environment for scripts/prod/ci-lib.sh.
-      - uses: teleport-actions/auth@v2
-        with:
-          proxy: ${{ vars.TELEPORT_PROXY }}
-          token: ${{ vars.TELEPORT_BOT_TOKEN }}
+      - name: Teleport Machine ID identity
+        run: |
+          out="$RUNNER_TEMP/tbot-out"
+          tbot start identity --oneshot \
+            --join-method=github \
+            --token="$TELEPORT_BOT_TOKEN" \
+            --proxy-server="$TELEPORT_PROXY" \
+            --storage="memory://" \
+            --destination="file://$out"
+          [ -s "$out/identity" ] || { echo "::error::tbot did not write an identity file"; exit 1; }
+          echo "TELEPORT_IDENTITY_FILE=$out/identity" >>"$GITHUB_ENV"
 
       # ----------------------------------------------------------------------------- provision
       - name: Provision hosts (Docker, SSH for Coolify, /data/coolify, .env)
@@ -433,6 +442,6 @@ jobs:
             echo "Database migrations are not undone by a rollback; restore from the provider's point-in-time backup if needed."
           } >>"$GITHUB_STEP_SUMMARY"
 
-      - name: Remove the secrets file
+      - name: Remove the secrets file and the Teleport identity
         if: always()
-        run: rm -f "$RUNNER_TEMP/ssm.env"
+        run: rm -rf "$RUNNER_TEMP/ssm.env" "$RUNNER_TEMP/tbot-out"
