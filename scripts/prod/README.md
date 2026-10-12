@@ -203,7 +203,7 @@ trust `pull_request` tokens, so they cannot reach AWS or Teleport. The workflow 
 Firewall: 80/443 open to the internet; SSH (58122) closed on the control plane and open to the control plane's
 IP only on the app servers; 8000, 6001, 6002, 5432 and 6379 closed (Docker-published ports bypass `ufw`, so
 this has to be the provider firewall). Managed Postgres 15+ with the control plane allowlisted and
-point-in-time recovery on. Create the VMs without a personal SSH key if the provider lets you; if one was
+point-in-time recovery on. On Postgres 15+ the app user cannot create tables in `public` by default; run once as the admin user, connected to the app database: `GRANT USAGE, CREATE ON SCHEMA public TO coolify;` (without it migrations fail with "permission denied for schema public"). Create the VMs without a personal SSH key if the provider lets you; if one was
 injected, the pipeline removes it. Teleport is the way in, so test the provider's web console once for recovery.
 
 ### 6. Cloudflare (once, by hand)
