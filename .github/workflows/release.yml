@@ -1,9 +1,9 @@
 name: Release
 
-# AvailCoolify release pipeline: test, build, push, deploy.
+# AvailCoolify release pipeline: build, push, deploy. Tests run in test.yml on every pull request, and
+# branch protection on avail requires them, so what lands on avail has already passed.
 #
-#   pull request to avail     tests only
-#   push to avail             tests, then build and push <DOCR_REGISTRY>/availcoolify:custom-<sha9>.
+#   push to avail             build and push <DOCR_REGISTRY>/availcoolify:custom-<sha9>.
 #                             With the repository variable PROD_AUTO_DEPLOY=true it then also asks for a
 #                             production deploy of that image (the "production" environment approval applies).
 #   Run workflow (manual):
@@ -24,8 +24,6 @@ name: Release
 # scripts/prod/README.md.
 
 on:
-  pull_request:
-    branches: [avail]
   push:
     branches: [avail]
   workflow_dispatch:
@@ -52,76 +50,13 @@ defaults:
     shell: bash
 
 jobs:
-  test:
-    name: Tests
-    # Rolling back needs no build and no tests: the image already exists.
-    if: github.event_name != 'workflow_dispatch' || inputs.action != 'rollback'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v7
-
-      - uses: shivammathur/setup-php@v2
-        with:
-          php-version: "8.4"
-          extensions: bcmath, curl, dom, fileinfo, intl, mbstring, openssl, pcntl, pdo_sqlite, pdo_pgsql, posix, sockets, sodium, xml, zip
-          coverage: none
-          tools: composer:v2
-
-      - name: Composer cache
-        uses: actions/cache@v6
-        with:
-          path: ~/.composer/cache
-          key: composer-${{ hashFiles('composer.lock') }}
-          restore-keys: composer-
-
-      # Runs post-install-cmd too, which applies patches/ (vendor patches, same as the image build).
-      - run: composer install --no-interaction --prefer-dist --no-progress
-
-      # Views render @vite(), which needs public/build/manifest.json.
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          cache: npm
-
-      - run: npm ci --no-audit --no-fund && npm run build
-
-      - name: Test suite
-        # Whole suite, one process per file, minus the tests listed in tests/avail-ci-skip.txt
-        # (failing on upstream main too, or obsolete because Avail changed the behaviour).
-        run: scripts/prod/ci-tests.sh "$RUNNER_TEMP/tests"
-
-      - name: Test logs
-        if: failure()
-        uses: actions/upload-artifact@v7
-        with:
-          name: test-logs
-          path: ${{ runner.temp }}/tests/logs
-          retention-days: 7
-
-      - name: Lint the pipeline (shell, PHP, workflow, Alloy)
-        run: |
-          sudo apt-get install -y -qq shellcheck >/dev/null
-          shellcheck -S warning scripts/deploy-custom.sh scripts/prod/*.sh
-          php -l scripts/prod/configure-instance.php
-          php -l scripts/prod/localhost-public-key.php
-          php -l scripts/prod/worker-key.php
-          docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.12 .github/workflows/release.yml
-          # The log shipper's config, with the Alloy version the VMs run: a syntax error here would otherwise
-          # surface only as a failed deploy (deploy-platform.sh: "avail-log-shipper is not running").
-          alloy_image="$(sed -n 's/^ *image: *\(grafana\/alloy:.*\)$/\1/p' docker/avail-otel/docker-compose.yml)"
-          docker run --rm -v "$PWD/docker/avail-otel:/cfg:ro" "$alloy_image" fmt /cfg/config.alloy >/dev/null
-
-      - name: Say why no image is built
-        if: github.event_name == 'push' && vars.AWS_BUILD_ROLE_ARN == ''
-        run: echo "::notice::No image was built because the repository variable AWS_BUILD_ROLE_ARN is not set (see scripts/prod/README.md)."
-
   image:
     name: Build and push image
-    needs: test
     # Pushes build once the build role is configured; a manual run always tries, so a missing setting
-    # fails loudly instead of silently skipping.
-    if: github.event_name != 'pull_request' && (github.event_name == 'workflow_dispatch' || vars.AWS_BUILD_ROLE_ARN != '')
+    # fails loudly instead of silently skipping. Rolling back needs no build: the image already exists.
+    if: >-
+      (github.event_name == 'push' && vars.AWS_BUILD_ROLE_ARN != '')
+      || (github.event_name == 'workflow_dispatch' && inputs.action != 'rollback')
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     permissions:
@@ -192,11 +127,11 @@ jobs:
 
   release:
     name: ${{ inputs.action || 'deploy' }} to production
-    needs: [test, image]
-    # Manual runs, or a push when PROD_AUTO_DEPLOY is "true". "test" and "image" are skipped for a
+    needs: image
+    # Manual runs, or a push when PROD_AUTO_DEPLOY is "true". "image" is skipped for a
     # rollback (the image already exists), so a skipped result is fine there.
     if: >-
-      !cancelled() && needs.test.result != 'failure' && (
+      !cancelled() && (
         (github.event_name == 'workflow_dispatch'
           && contains(fromJSON('["deploy","provision","rollback"]'), inputs.action)
           && (inputs.action == 'rollback' || needs.image.result == 'success'))
