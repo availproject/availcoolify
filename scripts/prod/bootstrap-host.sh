@@ -232,8 +232,10 @@ create_env_file() {
     set_env PUSHER_BACKEND_PORT 6001
     # Password login is disabled (Clerk only); the seeded root user just needs *a* password.
     set_env ROOT_USER_EMAIL "$ROOT_USER_EMAIL"
-    set_env ROOT_USERNAME "Avail Owner"
-    set_env ROOT_USER_PASSWORD "$(openssl rand -hex 24)"
+    # Quoted: Laravel's dotenv parser rejects an unquoted value with a space, and then every process fails.
+    set_env ROOT_USERNAME '"Avail Owner"'
+    # RootUserSeeder silently skips the owner unless the password has upper, lower, digit and symbol.
+    set_env ROOT_USER_PASSWORD "$(openssl rand -base64 30 | tr -d '/+=\n')-Aa1"
     set_env AVAIL_AUTO_JOIN_DOMAINS "${AUTO_JOIN_DOMAINS:-availproject.org}"
     grep -q '^DATABASE_URL=' "$ENV_FILE" || die "failed to write DATABASE_URL"
     grep -q '^APP_KEY=base64:' "$ENV_FILE" || die "failed to write APP_KEY"
