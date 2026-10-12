@@ -21,7 +21,8 @@
 #   ROOT_USER_EMAIL        first instance admin; their first Clerk login becomes the owner
 #   AUTO_JOIN_DOMAINS      default availproject.org
 #
-#   PRUNE_AUTHORIZED_KEYS  1 (default) removes every SSH key but Coolify's; 0 only lists them
+#   PRUNE_AUTHORIZED_KEYS  1 (default) removes every SSH key but Coolify's (and BREAKGLASS_PUBLIC_KEY); 0 only lists them
+#   BREAKGLASS_PUBLIC_KEY  public key kept next to Coolify's in root's authorized_keys (optional)
 #   ALLOW_SSH_WITHOUT_TELEPORT=1   escape hatch for a VM that is not in Teleport: keeps SSH on its old
 #                          ports and keeps existing keys. Never set by the workflow.
 #

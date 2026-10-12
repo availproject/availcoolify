@@ -228,8 +228,10 @@ jobs:
       PROD_AUTO_JOIN_DOMAINS: ${{ vars.PROD_AUTO_JOIN_DOMAINS }}
       PROD_DB_SSLMODE: ${{ vars.PROD_DB_SSLMODE }}
       SMOKE_IP: ${{ inputs.smoke_ip }}
-      # Removing every SSH key but Coolify's is the default; a repo variable can turn it off.
+      # Removing every SSH key but Coolify's (and the break-glass key) is the default; a repo variable can turn it off.
       PRUNE_AUTHORIZED_KEYS: ${{ vars.PROD_KEEP_SSH_KEYS == 'true' && '0' || '1' }}
+      # Public key kept next to Coolify's in root's authorized_keys on every VM, for when Teleport is down.
+      BREAKGLASS_PUBLIC_KEY: ${{ vars.PROD_BREAKGLASS_SSH_PUBKEY }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -316,7 +318,7 @@ jobs:
           provision_host() { # <node> <role>
             echo "::group::$2 $1"
             push_release "$1"
-            REMOTE_ENV="SSH_PORT DATABASE_URL DB_CA_CERT DB_SSLMODE COOLIFY_APP_KEY ROOT_USER_EMAIL AUTO_JOIN_DOMAINS PRUNE_AUTHORIZED_KEYS" \
+            REMOTE_ENV="SSH_PORT DATABASE_URL DB_CA_CERT DB_SSLMODE COOLIFY_APP_KEY ROOT_USER_EMAIL AUTO_JOIN_DOMAINS PRUNE_AUTHORIZED_KEYS BREAKGLASS_PUBLIC_KEY" \
               remote_env "$1" "$RELEASE_DIR/scripts/prod/bootstrap-host.sh --role $2"
             echo "::endgroup::"
           }
@@ -363,7 +365,7 @@ jobs:
           source scripts/prod/ci-lib.sh
           pubkey="$(remote "$PROD_CONTROL_PLANE_NODE" "docker exec -i coolify php < $RELEASE_DIR/scripts/prod/localhost-public-key.php" | grep -E '^(ssh-|ecdsa-)' | head -n1)"
           [ -n "$pubkey" ] || { echo "::error::could not read Coolify's localhost key from the database"; exit 1; }
-          COOLIFY_PUBLIC_KEY="$pubkey" REMOTE_ENV="COOLIFY_PUBLIC_KEY PRUNE_AUTHORIZED_KEYS" \
+          COOLIFY_PUBLIC_KEY="$pubkey" REMOTE_ENV="COOLIFY_PUBLIC_KEY PRUNE_AUTHORIZED_KEYS BREAKGLASS_PUBLIC_KEY" \
             remote_env "$PROD_CONTROL_PLANE_NODE" "$RELEASE_DIR/scripts/prod/ssh-authorized-keys.sh"
 
       # Coolify's key for the app servers ("avail-workers" in its database) is made by Coolify itself on the
@@ -383,7 +385,7 @@ jobs:
           export COOLIFY_PUBLIC_KEY
           for node in $PROD_APP_SERVER_NODES; do
             push_release "$node"
-            REMOTE_ENV="COOLIFY_PUBLIC_KEY PRUNE_AUTHORIZED_KEYS" remote_env "$node" "$RELEASE_DIR/scripts/prod/ssh-authorized-keys.sh"
+            REMOTE_ENV="COOLIFY_PUBLIC_KEY PRUNE_AUTHORIZED_KEYS BREAKGLASS_PUBLIC_KEY" remote_env "$node" "$RELEASE_DIR/scripts/prod/ssh-authorized-keys.sh"
           done
 
       - name: Log collector on every VM (Alloy to SigNoz)
