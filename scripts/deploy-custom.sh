@@ -34,7 +34,10 @@ fi
 # The compose files ship with the source tree and change between versions
 # (e.g. the realtime server moved into the coolify container), so keep them in sync.
 mkdir -p "$SOURCE/backups-compose/$STAMP"
-cp "$SOURCE"/docker-compose*.yml "$SOURCE/backups-compose/$STAMP/"
+# A fresh host (first deploy after provision) has none yet.
+if compgen -G "$SOURCE/docker-compose*.yml" >/dev/null; then
+    cp "$SOURCE"/docker-compose*.yml "$SOURCE/backups-compose/$STAMP/"
+fi
 cp docker-compose.yml docker-compose.prod.yml "$SOURCE/"
 
 # Report the version of the code actually running (the .env value otherwise stays at the last
