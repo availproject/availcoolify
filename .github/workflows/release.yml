@@ -99,7 +99,7 @@ jobs:
           path: ${{ runner.temp }}/tests/logs
           retention-days: 7
 
-      - name: Lint the pipeline (shell, PHP, workflow)
+      - name: Lint the pipeline (shell, PHP, workflow, Alloy)
         run: |
           sudo apt-get install -y -qq shellcheck >/dev/null
           shellcheck -S warning scripts/deploy-custom.sh scripts/prod/*.sh
@@ -107,6 +107,10 @@ jobs:
           php -l scripts/prod/localhost-public-key.php
           php -l scripts/prod/worker-key.php
           docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.12 .github/workflows/release.yml
+          # The log shipper's config, with the Alloy version the VMs run: a syntax error here would otherwise
+          # surface only as a failed deploy (deploy-platform.sh: "avail-log-shipper is not running").
+          alloy_image="$(sed -n 's/^ *image: *\(grafana\/alloy:.*\)$/\1/p' docker/avail-otel/docker-compose.yml)"
+          docker run --rm -v "$PWD/docker/avail-otel:/cfg:ro" "$alloy_image" fmt /cfg/config.alloy >/dev/null
 
       - name: Say why no image is built
         if: github.event_name == 'push' && vars.AWS_BUILD_ROLE_ARN == ''
