@@ -3,18 +3,16 @@ name: Release
 # AvailCoolify release pipeline: build, push, deploy. Tests run in test.yml on every pull request, and
 # branch protection on avail requires them, so what lands on avail has already passed.
 #
-#   push to avail             build and push <DOCR_REGISTRY>/availcoolify:custom-<sha9>.
-#                             With the repository variable PROD_AUTO_DEPLOY=true it then also asks for a
-#                             production deploy of that image (the "production" environment approval applies).
+#   push to avail             build and push registry.digitalocean.com/availj/availcoolify:custom-<sha9>.
+#                             Never deploys: production only changes through a manual run.
 #   Run workflow (manual):
-#     build       same as a push, never deploys
 #     deploy      build HEAD, deploy it to the control plane, configure the instance, smoke checks
 #     provision   everything from enrolled but bare VMs: Docker, SSH for Coolify, /data/coolify and .env,
 #                 log collector, then the same as deploy
 #     rollback    redeploy an earlier image (input image_tag, e.g. custom-06e5e21b9)
 #
-# deploy, provision and rollback run in the "production" environment: add required reviewers there so
-# nothing reaches production without an approval. Cloudflare (DNS records and zone rules) is set up once by
+# deploy, provision and rollback run in the "production" environment, which requires a reviewer's
+# approval. Cloudflare (DNS records and zone rules) is set up once by
 # hand, not by this workflow; see scripts/prod/README.md.
 #
 # No secret is stored in GitHub. The jobs assume AWS roles through GitHub's OIDC token and read their
@@ -31,14 +29,10 @@ on:
       action:
         description: What to do
         type: choice
-        options: [build, deploy, provision, rollback]
-        default: build
+        options: [deploy, provision, rollback]
+        default: deploy
       image_tag:
         description: "rollback only: image tag to go back to (e.g. custom-06e5e21b9)"
-        type: string
-        required: false
-      smoke_ip:
-        description: "optional: run the smoke checks against this IP instead of through DNS (throwaway VMs before their DNS record exists; TLS is not verified then)"
         type: string
         required: false
 
@@ -52,11 +46,8 @@ defaults:
 jobs:
   image:
     name: Build and push image
-    # Pushes build once the build role is configured; a manual run always tries, so a missing setting
-    # fails loudly instead of silently skipping. Rolling back needs no build: the image already exists.
-    if: >-
-      (github.event_name == 'push' && vars.AWS_BUILD_ROLE_ARN != '')
-      || (github.event_name == 'workflow_dispatch' && inputs.action != 'rollback')
+    # Rolling back needs no build: the image already exists.
+    if: github.event_name == 'push' || inputs.action != 'rollback'
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     permissions:
@@ -66,15 +57,6 @@ jobs:
       ref: ${{ steps.registry.outputs.ref }}
     steps:
       - uses: actions/checkout@v7
-
-      - name: Check configuration
-        env:
-          AWS_BUILD_ROLE_ARN: ${{ vars.AWS_BUILD_ROLE_ARN }}
-          AWS_REGION: ${{ vars.AWS_REGION }}
-        run: |
-          missing=""
-          for v in AWS_BUILD_ROLE_ARN AWS_REGION; do [ -n "${!v}" ] || missing="$missing $v"; done
-          [ -z "$missing" ] || { echo "::error::missing repository variables:$missing (see scripts/prod/README.md)"; exit 1; }
 
       # The build role can read exactly one parameter (the registry push token). It is trusted for the
       # avail branch, so anyone who can push there can use it; the role that reads every secret is only
@@ -88,17 +70,13 @@ jobs:
 
       - name: Registry token and image name
         id: registry
-        env:
-          SSM_PATH_PREFIX: ${{ vars.SSM_PATH_PREFIX || '/avail/coolify/prod/' }}
-          DOCR_REGISTRY: ${{ vars.DOCR_REGISTRY || 'registry.digitalocean.com/availj' }}
         run: |
-          token="$(aws ssm get-parameter --name "${SSM_PATH_PREFIX%/}/DOCR_PUSH_TOKEN" --with-decryption --query Parameter.Value --output text)"
-          [ -n "$token" ] && [ "$token" != None ] || { echo "::error::SSM parameter ${SSM_PATH_PREFIX%/}/DOCR_PUSH_TOKEN is empty"; exit 1; }
+          token="$(aws ssm get-parameter --name /avail/coolify/prod/DOCR_PUSH_TOKEN --with-decryption --query Parameter.Value --output text)"
+          [ -n "$token" ] && [ "$token" != None ] || { echo "::error::SSM parameter /avail/coolify/prod/DOCR_PUSH_TOKEN is empty"; exit 1; }
           echo "::add-mask::$token"
           {
             echo "token=$token"
-            echo "host=${DOCR_REGISTRY%%/*}"
-            echo "ref=${DOCR_REGISTRY%/}/availcoolify:custom-${GITHUB_SHA::9}"
+            echo "ref=registry.digitalocean.com/availj/availcoolify:custom-${GITHUB_SHA::9}"
           } >>"$GITHUB_OUTPUT"
 
       - uses: docker/setup-buildx-action@v4
@@ -106,7 +84,7 @@ jobs:
       # DigitalOcean's registry takes an API token as both user name and password.
       - uses: docker/login-action@v4
         with:
-          registry: ${{ steps.registry.outputs.host }}
+          registry: registry.digitalocean.com
           username: ${{ steps.registry.outputs.token }}
           password: ${{ steps.registry.outputs.token }}
 
@@ -128,15 +106,10 @@ jobs:
   release:
     name: ${{ inputs.action || 'deploy' }} to production
     needs: image
-    # Manual runs, or a push when PROD_AUTO_DEPLOY is "true". "image" is skipped for a
-    # rollback (the image already exists), so a skipped result is fine there.
+    # Manual runs only. "image" is skipped for a rollback (the image already exists).
     if: >-
-      !cancelled() && (
-        (github.event_name == 'workflow_dispatch'
-          && contains(fromJSON('["deploy","provision","rollback"]'), inputs.action)
-          && (inputs.action == 'rollback' || needs.image.result == 'success'))
-        || (github.event_name == 'push' && vars.PROD_AUTO_DEPLOY == 'true' && needs.image.result == 'success')
-      )
+      !cancelled() && github.event_name == 'workflow_dispatch'
+      && (inputs.action == 'rollback' || needs.image.result == 'success')
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     # Only production runs share this group, so a pull request can never cancel a queued deploy. GitHub
@@ -151,7 +124,7 @@ jobs:
     env:
       ACTION: ${{ inputs.action || 'deploy' }}
       AWS_REGION: ${{ vars.AWS_REGION }}
-      SSM_PATH_PREFIX: ${{ vars.SSM_PATH_PREFIX || '/avail/coolify/prod/' }}
+      SSM_PATH_PREFIX: /avail/coolify/prod/
       TELEPORT_PROXY: ${{ vars.TELEPORT_PROXY }}
       TELEPORT_BOT_TOKEN: ${{ vars.TELEPORT_BOT_TOKEN }}
       PROD_CONTROL_PLANE_NODE: ${{ vars.PROD_CONTROL_PLANE_NODE }}
@@ -162,9 +135,6 @@ jobs:
       PROD_ROOT_USER_EMAIL: ${{ vars.PROD_ROOT_USER_EMAIL }}
       PROD_AUTO_JOIN_DOMAINS: ${{ vars.PROD_AUTO_JOIN_DOMAINS }}
       PROD_DB_SSLMODE: ${{ vars.PROD_DB_SSLMODE }}
-      SMOKE_IP: ${{ inputs.smoke_ip }}
-      # Removing every SSH key but Coolify's (and the break-glass key) is the default; a repo variable can turn it off.
-      PRUNE_AUTHORIZED_KEYS: ${{ vars.PROD_KEEP_SSH_KEYS == 'true' && '0' || '1' }}
       # Public key kept next to Coolify's in root's authorized_keys on every VM, for when Teleport is down.
       BREAKGLASS_PUBLIC_KEY: ${{ vars.PROD_BREAKGLASS_SSH_PUBKEY }}
     steps:
@@ -177,31 +147,15 @@ jobs:
         env:
           BUILT_REF: ${{ needs.image.outputs.ref }}
           TAG: ${{ inputs.image_tag }}
-          DOCR_REGISTRY: ${{ vars.DOCR_REGISTRY || 'registry.digitalocean.com/availj' }}
         run: |
           if [ "$ACTION" = rollback ]; then
             [[ "$TAG" =~ ^custom-[0-9a-f]{7,40}$ ]] || { echo "::error::rollback needs image_tag like custom-06e5e21b9"; exit 1; }
-            echo "ref=${DOCR_REGISTRY%/}/availcoolify:${TAG}" >>"$GITHUB_OUTPUT"
+            echo "ref=registry.digitalocean.com/availj/availcoolify:${TAG}" >>"$GITHUB_OUTPUT"
             # The pipeline scripts stay current; only what ships with the image (compose files, version
             # constant, deploy-custom.sh) comes from the commit that image was built from.
             git checkout "${TAG#custom-}" -- docker-compose.yml docker-compose.prod.yml config/constants.php scripts/deploy-custom.sh
           else
             echo "ref=$BUILT_REF" >>"$GITHUB_OUTPUT"
-          fi
-
-      - name: Check configuration
-        env:
-          AWS_ROLE_ARN: ${{ vars.AWS_ROLE_ARN }}
-        run: |
-          missing=""
-          need() { for v in "$@"; do [ -n "${!v:-}" ] || missing="$missing $v"; done; }
-          need AWS_ROLE_ARN AWS_REGION TELEPORT_PROXY TELEPORT_BOT_TOKEN PROD_CONTROL_PLANE_NODE PROD_DASHBOARD_URL
-          if [ "$ACTION" = provision ]; then
-            need PROD_APP_SERVER_NODES PROD_APPS_WILDCARD PROD_ROOT_USER_EMAIL
-          fi
-          [ -z "$missing" ] || { echo "::error::missing repository variables:$missing (see scripts/prod/README.md)"; exit 1; }
-          if [ -n "$SMOKE_IP" ] && ! [[ "$SMOKE_IP" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]]; then
-            echo "::error::smoke_ip must be an IPv4 address, got: $SMOKE_IP"; exit 1
           fi
 
       - uses: aws-actions/configure-aws-credentials@v6
@@ -262,7 +216,7 @@ jobs:
           provision_host() { # <node> <role>
             echo "::group::$2 $1"
             push_release "$1"
-            REMOTE_ENV="SSH_PORT DATABASE_URL DB_CA_CERT DB_SSLMODE COOLIFY_APP_KEY ROOT_USER_EMAIL AUTO_JOIN_DOMAINS PRUNE_AUTHORIZED_KEYS BREAKGLASS_PUBLIC_KEY" \
+            REMOTE_ENV="SSH_PORT DATABASE_URL DB_CA_CERT DB_SSLMODE COOLIFY_APP_KEY ROOT_USER_EMAIL AUTO_JOIN_DOMAINS BREAKGLASS_PUBLIC_KEY" \
               remote_env "$1" "$RELEASE_DIR/scripts/prod/bootstrap-host.sh --role $2"
             echo "::endgroup::"
           }
@@ -301,6 +255,14 @@ jobs:
           REMOTE_ENV="AVAIL_DASHBOARD_URL AVAIL_APPS_WILDCARD AVAIL_SSH_PORT AVAIL_TRUST_CLOUDFLARE CLERK_CLIENT_ID CLERK_CLIENT_SECRET CLERK_BASE_URL" \
             remote_env "$PROD_CONTROL_PLANE_NODE" 'f=$(mktemp); env | grep -E "^(AVAIL_|CLERK_)" >"$f"; docker exec -i --env-file "$f" coolify php < '"$RELEASE_DIR"'/scripts/prod/configure-instance.php; rc=$?; rm -f "$f"; exit $rc'
 
+      # Coolify validates its own server only once, on first boot; if that failed, no proxy ever starts and the
+      # dashboard is unreachable (Cloudflare 521). Validate it and start the proxy when it is not running.
+      - name: Coolify's own server and its proxy
+        if: env.ACTION != 'rollback'
+        run: |
+          source scripts/prod/ci-lib.sh
+          remote "$PROD_CONTROL_PLANE_NODE" "docker exec -i coolify php < $RELEASE_DIR/scripts/prod/localhost-proxy.php"
+
       # Coolify reaches its own host with the "localhost's key" from its database. Make exactly that key the
       # only one in the control plane's authorized_keys (covers re-runs and a VM rebuilt from the database).
       - name: Control plane SSH - only Coolify's own key
@@ -309,7 +271,7 @@ jobs:
           source scripts/prod/ci-lib.sh
           pubkey="$(remote "$PROD_CONTROL_PLANE_NODE" "docker exec -i coolify php < $RELEASE_DIR/scripts/prod/localhost-public-key.php" | grep -E '^(ssh-|ecdsa-)' | head -n1)"
           [ -n "$pubkey" ] || { echo "::error::could not read Coolify's localhost key from the database"; exit 1; }
-          COOLIFY_PUBLIC_KEY="$pubkey" REMOTE_ENV="COOLIFY_PUBLIC_KEY PRUNE_AUTHORIZED_KEYS BREAKGLASS_PUBLIC_KEY" \
+          COOLIFY_PUBLIC_KEY="$pubkey" REMOTE_ENV="COOLIFY_PUBLIC_KEY BREAKGLASS_PUBLIC_KEY" \
             remote_env "$PROD_CONTROL_PLANE_NODE" "$RELEASE_DIR/scripts/prod/ssh-authorized-keys.sh"
 
       # Coolify's key for the app servers ("avail-workers" in its database) is made by Coolify itself on the
@@ -329,7 +291,7 @@ jobs:
           export COOLIFY_PUBLIC_KEY
           for node in $PROD_APP_SERVER_NODES; do
             push_release "$node"
-            REMOTE_ENV="COOLIFY_PUBLIC_KEY PRUNE_AUTHORIZED_KEYS BREAKGLASS_PUBLIC_KEY" remote_env "$node" "$RELEASE_DIR/scripts/prod/ssh-authorized-keys.sh"
+            REMOTE_ENV="COOLIFY_PUBLIC_KEY BREAKGLASS_PUBLIC_KEY" remote_env "$node" "$RELEASE_DIR/scripts/prod/ssh-authorized-keys.sh"
           done
 
       - name: Log collector on every VM (Alloy to SigNoz)
@@ -348,10 +310,8 @@ jobs:
               remote_env "$node" "$RELEASE_DIR/scripts/prod/deploy-platform.sh"
           done
 
-      # With smoke_ip, the dashboard's host name is pinned to that IP (throwaway VMs have no DNS record and
-      # so no Let's Encrypt certificate yet, which is why TLS is not verified then).
       - name: Smoke checks
-        run: scripts/prod/smoke-check.sh "$PROD_DASHBOARD_URL" "$SMOKE_IP"
+        run: scripts/prod/smoke-check.sh "$PROD_DASHBOARD_URL"
 
       - name: Notify Slack
         if: always()
@@ -376,7 +336,3 @@ jobs:
             echo "Roll back: run this workflow with action **rollback** and image_tag \`${PREVIOUS##*:}\`."
             echo "Database migrations are not undone by a rollback; restore from the provider's point-in-time backup if needed."
           } >>"$GITHUB_STEP_SUMMARY"
-
-      - name: Remove the secrets file and the Teleport identity
-        if: always()
-        run: rm -rf "$RUNNER_TEMP/ssm.env" "$RUNNER_TEMP/tbot-out"
