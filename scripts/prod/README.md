@@ -74,7 +74,7 @@ environment only, so it sits behind the approval.
     "Condition": {
       "StringEquals": {
         "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
-        "token.actions.githubusercontent.com:sub": "repo:availproject/availcoolify:environment:production"
+        "token.actions.githubusercontent.com:sub": "repo:availproject@125018949/availcoolify@1379972354:environment:production"
       }
     }
   }]
@@ -97,7 +97,11 @@ Permissions:
 }
 ```
 
-**Build role** (`AWS_BUILD_ROLE_ARN`). Same trust policy, but `sub` is `repo:availproject/availcoolify:ref:refs/heads/avail`.
+**Build role** (`AWS_BUILD_ROLE_ARN`). Same trust policy, but `sub` is `repo:availproject@125018949/availcoolify@1379972354:ref:refs/heads/avail`.
+
+This repository uses GitHub's *immutable* OIDC subject (owner and repository ids, not names), so the name-only form
+`repo:availproject/availcoolify:…` is rejected. Check the prefix with
+`gh api repos/availproject/availcoolify/actions/oidc/customization/sub` (`sub_claim_prefix`).
 Permissions: `ssm:GetParameter` on `.../parameter/avail/coolify/prod/DOCR_PUSH_TOKEN` only.
 
 If the parameters use a customer-managed KMS key instead of `alias/aws/ssm`, both roles also need `kms:Decrypt`
@@ -166,7 +170,7 @@ All of this needs a repository admin of `availproject/availcoolify`.
   a workflow from any branch; this keeps the production jobs on `avail`. (The AWS build role and the Teleport
   token above only accept `avail` as well.)
 - Settings → Actions → General: if the organisation limits which actions may run, allow
-  `aws-actions/*`, `teleport-actions/*`, `docker/*` and `shivammathur/setup-php`. The rest are GitHub's own.
+  `aws-actions/*`, `teleport-actions/setup`, `docker/*` and `shivammathur/setup-php`. The rest are GitHub's own.
 
 **Because the repository is public:** run logs are public too. Secrets are masked and so is the AWS account id,
 but the Teleport proxy address, node names, image tags and the dashboard URL are not secret and appear in the logs
