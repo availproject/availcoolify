@@ -42,8 +42,16 @@ log() { printf '\n==> %s\n' "$*"; }
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 
 # ----------------------------------------------------------------------------- SSH
-# Ports sshd really listens on (with ssh.socket this differs from sshd_config's Port).
-sshd_ports() { ss -H -ltnp 2>/dev/null | grep '"sshd"' | awk '{print $4}' | sed 's/.*://' | sort -un; }
+# Ports sshd really listens on (with ssh.socket this differs from sshd_config's Port). Under socket
+# activation (Ubuntu 24.04) systemd, not sshd, owns the listening socket, so read ssh.socket's ports too.
+sshd_ports() {
+    {
+        ss -H -ltnp 2>/dev/null | grep '"sshd"' | awk '{print $4}' | sed 's/.*://'
+        if systemctl is-active --quiet ssh.socket 2>/dev/null; then
+            systemctl show ssh.socket -p Listen --value 2>/dev/null | grep -oE ':[0-9]+ \(Stream\)' | grep -oE '[0-9]+'
+        fi
+    } | sort -un
+}
 
 teleport_active() { systemctl is-active --quiet teleport 2>/dev/null; }
 
