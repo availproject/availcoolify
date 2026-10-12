@@ -1,0 +1,81 @@
+name: Tests
+
+# Every pull request to avail, forks included: the test suite and the pipeline lint. No AWS, no secrets,
+# and no pull_request_target, so a fork's code never sees credentials. Fork runs from outside
+# contributors wait for a maintainer's approval (repository setting). Branch protection on avail requires
+# this check, so release.yml does not test again.
+
+on:
+  pull_request:
+    branches: [avail]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  test:
+    name: Tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          extensions: bcmath, curl, dom, fileinfo, intl, mbstring, openssl, pcntl, pdo_sqlite, pdo_pgsql, posix, sockets, sodium, xml, zip
+          coverage: none
+          tools: composer:v2
+
+      - name: Composer cache
+        uses: actions/cache@v6
+        with:
+          path: ~/.composer/cache
+          key: composer-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-
+
+      # Runs post-install-cmd too, which applies patches/ (vendor patches, same as the image build).
+      - run: composer install --no-interaction --prefer-dist --no-progress
+
+      # Views render @vite(), which needs public/build/manifest.json.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci --no-audit --no-fund && npm run build
+
+      - name: Test suite
+        # Whole suite, one process per file, minus the tests listed in tests/avail-ci-skip.txt
+        # (failing on upstream main too, or obsolete because Avail changed the behaviour).
+        run: scripts/prod/ci-tests.sh "$RUNNER_TEMP/tests"
+
+      - name: Test logs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-logs
+          path: ${{ runner.temp }}/tests/logs
+          retention-days: 7
+
+      - name: Lint the pipeline (shell, PHP, workflow, Alloy)
+        run: |
+          sudo apt-get install -y -qq shellcheck >/dev/null
+          shellcheck -S warning scripts/deploy-custom.sh scripts/prod/*.sh
+          php -l scripts/prod/configure-instance.php
+          php -l scripts/prod/localhost-public-key.php
+          php -l scripts/prod/worker-key.php
+          docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.12 .github/workflows/release.yml .github/workflows/test.yml
+          # The log shipper's config, with the Alloy version the VMs run: a syntax error here would otherwise
+          # surface only as a failed deploy (deploy-platform.sh: "avail-log-shipper is not running").
+          alloy_image="$(sed -n 's/^ *image: *\(grafana\/alloy:.*\)$/\1/p' docker/avail-otel/docker-compose.yml)"
+          docker run --rm -v "$PWD/docker/avail-otel:/cfg:ro" "$alloy_image" fmt /cfg/config.alloy >/dev/null
+
