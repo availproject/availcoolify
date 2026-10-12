@@ -21,6 +21,7 @@ $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
 
 use App\Actions\Proxy\GetProxyConfiguration;
 use App\Actions\Proxy\SaveProxyConfiguration;
+use App\Actions\Proxy\StartProxy;
 use App\Models\InstanceSettings;
 use App\Models\OauthSetting;
 use App\Models\Server;
@@ -137,10 +138,16 @@ foreach (Server::all() as $server) {
             if ($command === $before) {
                 echo "  = proxy: Cloudflare trusted IPs already set\n";
             } else {
-                echo "  ~ proxy: Cloudflare trusted IPs on http+https (restart the proxy to apply on a live server)\n";
+                echo "  ~ proxy: Cloudflare trusted IPs on http+https\n";
                 if (! $dry) {
                     $yaml['services']['traefik']['command'] = $command;
                     SaveProxyConfiguration::run($server, Yaml::dump($yaml, 20, 2, Yaml::DUMP_MULTI_LINE_LITERAL_BLOCK));
+                    // A running proxy reads its configuration only when it starts; StartProxy recreates it.
+                    $running = trim((string) instant_remote_process(["docker inspect -f '{{.State.Running}}' coolify-proxy 2>/dev/null || true"], $server, false));
+                    if ($running === 'true') {
+                        StartProxy::run($server, false);
+                        echo "  ~ proxy restarted to apply it\n";
+                    }
                 }
             }
         } catch (Throwable $e) {
