@@ -44,7 +44,12 @@ function get_socialite_provider(string $provider)
             ['base_url' => $oauth_setting->base_url],
         );
 
-        return Socialite::driver($provider)->setConfig($authentik_clerk_config);
+        $driver = Socialite::driver($provider)->setConfig($authentik_clerk_config);
+
+        // Clerk requires PKCE for every OAuth client, confidential ones included: without a code_challenge it
+        // refuses the authorization request ("PKCE is required for this client"). Socialite keeps the verifier
+        // in the session between the redirect and the callback.
+        return $provider == 'clerk' ? $driver->enablePKCE() : $driver;
     }
 
     if ($provider == 'zitadel') {
