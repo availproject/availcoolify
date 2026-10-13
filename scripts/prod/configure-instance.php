@@ -12,6 +12,8 @@
  *   AVAIL_SSH_PORT           SSH port Coolify uses to reach its own host (server id 0)
  *   AVAIL_TRUST_CLOUDFLARE   1 = add Cloudflare's ranges as Traefik forwardedHeaders.trustedIPs
  *   CLERK_CLIENT_ID, CLERK_CLIENT_SECRET, CLERK_BASE_URL
+ *   CF_EMAIL_TOKEN           Cloudflare API token (Email Sending: Edit); turns on transactional email over
+ *                            Cloudflare's SMTP, sent as AVAIL_SMTP_FROM (default noreply@notify.avail.so)
  *   DRY_RUN                  1 = print what would change, save nothing
  */
 
@@ -38,7 +40,7 @@ $failed = false;
 
 echo $dry ? "DRY RUN: nothing will be saved\n" : "Applying configuration\n";
 
-$secret = ['client_secret'];
+$secret = ['client_secret', 'smtp_password'];
 
 /** Set attributes on a model, print each change (secrets masked), save unless dry-run. */
 $apply = static function ($model, array $attributes, string $label) use ($dry, $secret): bool {
@@ -50,7 +52,8 @@ $apply = static function ($model, array $attributes, string $label) use ($dry, $
         return false;
     }
     foreach ($dirty as $key => $new) {
-        $shown = in_array($key, $secret, true) ? '********' : json_encode($new);
+        // getDirty() holds the stored (for encrypted casts: ciphertext) value; print the readable one.
+        $shown = in_array($key, $secret, true) ? '********' : json_encode($model->getAttribute($key));
         echo "  ~ $label.$key -> $shown\n";
     }
     if ($dry) {
@@ -195,6 +198,26 @@ $apply($clerk, $clerkWanted, 'clerk');
 if (empty($clerk->base_url) || empty($clerk->client_id)) {
     echo "  ! Clerk base URL / client id still empty; 4.4.0 refuses logins without them\n";
     $failed = true;
+}
+
+// --- Transactional email ------------------------------------------------------------------
+// Cloudflare Email Sending over SMTP: port 465 is implicit TLS, the user name is the literal "api_token" and
+// the password is the token. The sending domain (notify.avail.so) is set up once in Cloudflare.
+echo "Email\n";
+if ($env('CF_EMAIL_TOKEN')) {
+    $apply($settings, [
+        'smtp_enabled' => true,
+        'smtp_host' => 'smtp.mx.cloudflare.net',
+        'smtp_port' => 465,
+        'smtp_encryption' => 'tls',
+        'smtp_username' => 'api_token',
+        'smtp_password' => $env('CF_EMAIL_TOKEN'),
+        'smtp_from_address' => $env('AVAIL_SMTP_FROM') ?? 'noreply@notify.avail.so',
+        'smtp_from_name' => 'AvailCoolify',
+        'resend_enabled' => false,
+    ], 'email');
+} else {
+    echo "  = no CF_EMAIL_TOKEN; email settings left as they are\n";
 }
 
 echo $failed ? "Finished with warnings\n" : "Done\n";
