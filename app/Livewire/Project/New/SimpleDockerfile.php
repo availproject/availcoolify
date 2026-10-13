@@ -68,7 +68,7 @@ CMD ["nginx", "-g", "daemon off;"]
         ]);
         $application->save();
 
-        $fqdn = generateUrl(server: $destination->server, random: $application->uuid);
+        $fqdn = availAppUrl($destination->server, $application);
         $application->update([
             'name' => 'dockerfile-'.$application->uuid,
             'fqdn' => $fqdn,
