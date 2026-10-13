@@ -149,7 +149,7 @@ class DockerImage extends Component
         ]);
         $application->save();
 
-        $fqdn = generateUrl(server: $destination->server, random: $application->uuid);
+        $fqdn = availAppUrl($destination->server, $application);
         $application->update([
             'name' => 'docker-image-'.$application->uuid,
             'fqdn' => $fqdn,

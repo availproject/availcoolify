@@ -286,7 +286,7 @@ function availHostUsedElsewhere(string $host, \App\Models\Application $applicati
     }
 
     $applications = \App\Models\Application::query()
-        ->whereKeyNot($application->getKey())
+        ->when($application->exists, fn ($query) => $query->whereKeyNot($application->getKey()))
         ->where('fqdn', 'like', '%'.$host.'%')
         ->pluck('fqdn');
     $services = \App\Models\ServiceApplication::query()
