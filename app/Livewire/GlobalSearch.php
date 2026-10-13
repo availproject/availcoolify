@@ -937,7 +937,8 @@ class GlobalSearch extends Component
             );
         }
 
-        return $navigation;
+        // Avail: only pages this user may open (availAreaRoutes()).
+        return $navigation->filter(fn ($item) => availCanOpenUrl(data_get($item, 'link')))->values();
     }
 
     private function search()

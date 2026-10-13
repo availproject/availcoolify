@@ -44,6 +44,8 @@ class AppServiceProvider extends ServiceProvider
         $this->configureGitLabHttp();
         $this->configureOidcSocialite();
         $this->configureQueue();
+        // Avail: actions sent from an owner- or admin-only page are checked against that page's route.
+        \Livewire\Livewire::addPersistentMiddleware([\App\Http\Middleware\AvailAreaAccess::class]);
     }
 
     /**

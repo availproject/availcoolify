@@ -30,6 +30,12 @@
 
             </x-application.settings-section>
 
+            {{-- Avail: who owns the app, and handing it over to someone else in the team. --}}
+            <x-application.settings-section id="app-owner-section" title="App owner" helper="The app owner can change this app's settings and environment variables, read its runtime logs and delete it.">
+                <livewire:project.application.app-owner :application="$application"
+                    :key="'application-app-owner-'.$application->id" />
+            </x-application.settings-section>
+
             <x-application.settings-section id="access-section" title="Access" helper="Manage how this application is reached publicly and from the Docker network.">
             <section id="public-access-section" @class([
                 'border-b border-neutral-200 pb-5 dark:border-white/[0.07]' => $buildPack !== 'dockercompose',
@@ -572,7 +578,7 @@
                     @else
                     <p class="mb-4 text-[12px] leading-5 text-neutral-600 dark:text-fg-dim">
                         Clerk login (team members only) is set per environment in
-                        @if (isInstanceAdmin())
+                        @if (isInstanceAdmin() && availCanOpenRoute('settings.access-protection'))
                             <a class="underline underline-offset-2" href="{{ route('settings.access-protection') }}" {{ wireNavigate() }}>Settings &rarr; Access protection</a>.
                         @else
                             Settings &rarr; Access protection.

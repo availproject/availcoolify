@@ -66,6 +66,17 @@ class ApplicationPolicy
     }
 
     /**
+     * Avail: hand the app over to another member, admin or the owner (avail_created_by_user_id).
+     * Admins and the team owner may transfer any app, the app owner their own.
+     */
+    public function transferOwnership(User $user, Application $application): bool
+    {
+        $teamId = $this->getTeamId($application);
+
+        return $teamId !== null && ($user->isAdminOfTeam($teamId) || availOwnsApplication($user, $application));
+    }
+
+    /**
      * Determine whether the user can delete the model.
      */
     public function delete(User $user, Application $application): bool

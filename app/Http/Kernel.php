@@ -80,6 +80,7 @@ class Kernel extends HttpKernel
             CheckForcePasswordReset::class,
             DecideWhatToDoWithUser::class,
             \App\Http\Middleware\AvailGuestAccess::class,
+            \App\Http\Middleware\AvailAreaAccess::class,
 
         ],
 
@@ -113,6 +114,7 @@ class Kernel extends HttpKernel
         'api.ability' => ApiAbility::class,
         'api.sensitive' => ApiSensitiveData::class,
         'api.token.team' => EnsureTokenBelongsToCurrentTeamMember::class,
+        'avail.api.area' => \App\Http\Middleware\AvailApiAreaAccess::class,
         'can.create.resources' => CanCreateResources::class,
         'can.create.applications' => \App\Http\Middleware\CanCreateApplications::class,
         'can.update.resource' => CanUpdateResource::class,

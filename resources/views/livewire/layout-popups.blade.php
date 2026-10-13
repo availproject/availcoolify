@@ -241,7 +241,7 @@
         </x-banner>
     @endif
     {{-- Avail: guests cannot open notification settings. --}}
-    @if (!currentTeam()->isAnyNotificationEnabled() && ! availIsGuest())
+    @if (!currentTeam()->isAnyNotificationEnabled() && ! availIsGuest() && availCanOpenRoute('notifications.email'))
         <span x-show="popups.notification">
             <x-popup>
                 <x-slot:customActions>
