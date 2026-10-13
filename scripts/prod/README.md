@@ -1,6 +1,6 @@
 # Release pipeline
 
-`.github/workflows/release.yml` tests, builds, pushes and deploys AvailCoolify. It replaces
+`.github/workflows/test.yml` tests every pull request to `avail`; `.github/workflows/release.yml` builds, pushes and deploys AvailCoolify. It replaces
 `avail-production.yml`. It lives in `availproject/availcoolify` (a public repository) and deploys from the
 `avail` branch.
 
@@ -176,7 +176,7 @@ trust `pull_request` tokens, so they cannot reach AWS or Teleport. The workflow 
 
 | Variable | Example / default | Used by |
 | --- | --- | --- |
-| `AWS_BUILD_ROLE_ARN` | `arn:aws:iam::123456789012:role/avail-coolify-build` | build. While unset, pushes run the tests only |
+| `AWS_BUILD_ROLE_ARN` | `arn:aws:iam::123456789012:role/avail-coolify-build` | build. While unset, pushes build nothing |
 | `AWS_ROLE_ARN` | `arn:aws:iam::123456789012:role/avail-coolify-release` | release |
 | `AWS_REGION` | `eu-central-1` | both |
 | `TELEPORT_PROXY` | `teleport.example.com:443` | release |
@@ -226,7 +226,7 @@ are proxied.
 3. App servers, without anyone touching a key: every deploy runs `worker-key.php` in the container, which makes Coolify's
    key `avail-workers` (ed25519, team 0) the first time and returns the same key after that. The pipeline installs its public
    half on every app server over Teleport and removes all other keys; the private half never leaves the control plane.
-   Then Servers → Add (user `root`, port 58122, key `avail-workers`, the app server's private VPC address) and set the wildcard
+   Then, as the Owner (servers are owner-only), Servers → Add (user `root`, port 58122, key `avail-workers`, the app server's private VPC address) and set the wildcard
    domain. To rotate the key, rename `avail-workers` in Keys & Tokens and run **deploy**: a new key is made and installed, the
    old one is removed from the app servers; switch the servers to the new key in the UI.
 4. Add the GitHub App as a source, then run `php artisan avail:github-platform <id>` in the container.
@@ -282,7 +282,7 @@ line for the list.
 ## Not automated
 
 - Everything in Cloudflare (setup step 6), buying Advanced Certificate Manager, WAF managed rulesets, restricting 80/443 to Cloudflare's ranges (provider firewall).
-- Adding app servers in Coolify (Servers → Add), their proxy trusted IPs (re-run **deploy** after adding one) and their wildcard domain if it differs. Coolify's SSH key for them is made and installed by the pipeline.
+- Adding app servers in Coolify (Servers → Add, Owner only), their proxy trusted IPs (re-run **deploy** after adding one) and their wildcard domain if it differs. Coolify's SSH key for them is made and installed by the pipeline.
 - Custom app domains on the company zone, email, Coolify's notification channels (the Slack webhook is only used for deploy messages for now), S3/R2 backup storage, the restore drill, Clerk MFA and the break-glass test.
 - SigNoz alerts and the dashboards for the log collector.
 
