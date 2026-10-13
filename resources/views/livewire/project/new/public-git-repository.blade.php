@@ -59,7 +59,7 @@
                     <div class="grid gap-4 sm:grid-cols-2">
                         {{-- Avail: the repository's branches, its default branch preselected. --}}
                         @if (count($availBranches) > 0)
-                            <x-forms.searchable-listbox id="git_branch" label="Branch" required
+                            <x-forms.listbox searchable id="git_branch" label="Branch" required
                                 searchPlaceholder="Search branches…"
                                 :options="collect($availBranches)->map(fn ($branch) => ['value' => $branch, 'label' => $branch])->all()" />
                         @else
