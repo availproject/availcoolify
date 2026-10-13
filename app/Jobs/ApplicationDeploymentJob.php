@@ -4188,7 +4188,8 @@ COPY ./nginx.conf /etc/nginx/conf.d/default.conf");
      */
     private function availStaticNginxConfig(string $nginxConfigBase64): string
     {
-        if (! config('avail.routing_rules_enabled', true)) {
+        // Without a booted application (plain unit tests) there is no config: keep the rules on.
+        if (app()->bound('config') && ! config('avail.routing_rules_enabled', true)) {
             return $nginxConfigBase64;
         }
         $target = $this->pull_request_id === 0 ? $this->application : $this->preview;
