@@ -50,6 +50,7 @@ A public repository also works without the GitHub app: **+ New resource** → **
 
 - **Missing account or org:** use **+ Install on a GitHub account or organisation** (org installs need an org owner on GitHub).
 - **Missing repo:** use **Adjust repository access** and add it to the installation.
+- **Server:** new apps and databases go to the app server; with one app server you never see a server choice. Only the Owner can put something on the Coolify host itself.
 - **Build:** apps build with Railpack, which detects the language from the repo. A Dockerfile can be used instead (app → Configuration → Build Pack). Docker Compose is admin-only.
 - **Changing settings later:** on apps you created you can change the branch, build pack, commands, directories, port, health check and pre/post-deploy commands yourself. Custom Docker options, container labels, port mappings, persistent storage and the repository itself stay with admins.
 - **Manual deploy:** open the app → **Deploy** (or **Redeploy**). Use **Restart** when only the container needs restarting, not a rebuild.
