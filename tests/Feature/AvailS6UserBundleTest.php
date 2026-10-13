@@ -1,21 +1,31 @@
 <?php
 
-// The production image lists its services in s6-overlay's user-bundles.d. With s6-overlay 3.2.3.2 (in the
-// serversideup base image since 2026-10-08) an s6-rc.d/user directory makes /init rewrite its `type` file
-// on every boot, which fails as www-data, so no service starts. Replaces the production half of the
-// upstream ReverbAndTerminalPackagingTest check, which still looks in s6-rc.d/user.
+// The base image and the place s6-overlay reads the service list from must change together, or the
+// container starts nginx and PHP-FPM only (no migrations, Horizon, scheduler, Reverb or terminal):
+// - serversideup PHP v4 (pinned upstream to v4.5.1 in f55efc859) starts what s6-rc.d/user/contents.d lists;
+// - v5 (s6-overlay 3.2.3.2) reads user-bundles.d/user/contents.d and rewrites s6-rc.d/user/type on every
+//   boot, which fails as www-data (3fe93dd13), so s6-rc.d/user must not exist there.
 
 $s6 = fn (string $path) => base_path('docker/production/etc/s6-overlay/'.$path);
+$services = ['db-migration', 'horizon', 'init-script', 'init-seeder', 'reverb', 'scheduler-worker', 'terminal-server'];
 
-it('lists every production service in the user bundle', function () use ($s6) {
-    foreach (['db-migration', 'horizon', 'init-script', 'init-seeder', 'reverb', 'scheduler-worker', 'terminal-server'] as $service) {
-        expect(file_exists($s6("user-bundles.d/user/contents.d/{$service}")))->toBeTrue("{$service} is not in the user bundle")
+it('lists every production service where the pinned base image looks for it', function () use ($s6, $services) {
+    preg_match('/^ARG SERVERSIDEUP_PHP_VERSION=(\S+)$/m', file_get_contents(base_path('docker/production/Dockerfile')), $match);
+    $tag = $match[1] ?? '';
+    $isV4 = (bool) preg_match('/-v4\.\d+\.\d+$/', $tag);
+    $bundle = $isV4 ? 's6-rc.d/user/contents.d' : 'user-bundles.d/user/contents.d';
+
+    expect($tag)->not->toBe('');
+    foreach ($services as $service) {
+        expect(file_exists($s6("{$bundle}/{$service}")))->toBeTrue("{$service} is not listed in {$bundle} for base image {$tag}")
             ->and(is_dir($s6("s6-rc.d/{$service}")))->toBeTrue("{$service} has no service definition");
     }
-});
 
-it('does not bring back the deprecated s6-rc.d/user bundle', function () use ($s6) {
-    expect(is_dir($s6('s6-rc.d/user')))->toBeFalse();
+    if ($isV4) {
+        expect(is_dir($s6('user-bundles.d')))->toBeFalse('v4 ignores user-bundles.d; keep one list only');
+    } else {
+        expect(is_dir($s6('s6-rc.d/user')))->toBeFalse('s6-rc.d/user breaks startup on v5');
+    }
 });
 
 it('runs Reverb and the terminal server after the init script', function () use ($s6) {

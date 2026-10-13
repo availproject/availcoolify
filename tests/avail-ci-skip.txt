@@ -22,7 +22,6 @@ tests/Unit/ProductionImageWorkflowTest.php                    # asserts upstream
 tests/Feature/ForgotPasswordLoginLinkTest.php                 # password login is disabled (Clerk only)
 tests/Feature/Team/ActiveTeamPersistenceTest.php :: persists the active team after a password login   # password login is disabled
 tests/Feature/OauthPasswordConfirmationTest.php :: lets a user with a linked identity and no password enable 2fa|still asks a password user without a linked identity   # profile 2FA section removed (no two-factor.enable route)
-tests/Feature/ReverbAndTerminalPackagingTest.php :: runs Reverb and terminal websocket services inside the Coolify containers   # production lists its services in user-bundles.d (s6-overlay 3.2.3.2); covered by AvailS6UserBundleTest
 tests/Feature/AccountAuditTest.php :: accepted magic link invitation without the temporary password    # invites land on /invitations/<uuid> for users without a team
 tests/Feature/AccountAuditTest.php :: registration of a user created by oauth login.*root team only    # Clerk users get no personal team
 tests/Feature/ApplicationHttpBasicAuthUiTest.php :: disabling http basic auth is saved instantly       # Security section now driven by authMode
