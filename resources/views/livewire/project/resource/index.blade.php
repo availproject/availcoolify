@@ -12,6 +12,7 @@
                 </p>
             </div>
             <div class="flex w-fit shrink-0 items-center gap-2">
+                @if (availCanOpenRoute('shared-variables.environment.show'))
                 <a href="{{ route('shared-variables.environment.show', ['project_uuid' => $project->uuid, 'environment_uuid' => $environment->uuid]) }}"
                     {{ wireNavigate() }}
                     class="button whitespace-nowrap"
@@ -20,6 +21,7 @@
                     <x-reicon name="variables" class="size-3.5" />
                     Shared variables
                 </a>
+                @endif
                 @can('update', $project)
                     <a href="{{ route('project.environment.edit', ['project_uuid' => $project->uuid, 'environment_uuid' => $environment->uuid]) }}"
                         {{ wireNavigate() }}
@@ -212,9 +214,9 @@
                                         class="relative block truncate text-[13px] font-semibold text-black hover:underline dark:text-fg"
                                         x-text="item.name"></a>
                                 </div>
-                                <p class="min-h-4 truncate text-[11px] text-neutral-500 dark:text-fg-faint">
-                                    <span x-show="item.description" x-text="item.description"></span>
-                                </p>
+                                <p class="truncate text-[11px] text-neutral-500 dark:text-fg-faint"
+                                    x-show="item.description?.trim()"
+                                    x-text="item.description"></p>
                                 <div class="mobile-resource-domain min-w-0">
                                     <template x-if="item.fqdn">
                                         <a :href="firstDomain(item.fqdn)" target="_blank" rel="noopener noreferrer"

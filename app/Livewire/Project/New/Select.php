@@ -365,6 +365,12 @@ class Select extends Component
 
     public function setServer(Server $server)
     {
+        if (! availMayDeployToServer($server)) {
+            $this->dispatch('error', 'Use an app server. Only the owner can deploy to the Coolify host.');
+            $this->current_step = 'servers';
+
+            return;
+        }
         $this->server_id = $server->id;
         $this->server = $server;
         $this->standaloneDockers = $server->standaloneDockers;
@@ -419,7 +425,9 @@ class Select extends Component
 
     public function loadServers()
     {
-        $this->servers = Server::isUsable()->get()->sortBy('name');
+        // Avail: admins and members don't get the Coolify host when an app server exists, so with one
+        // app server the server step is skipped (setType() picks the only server).
+        $this->servers = availDeployableServers(Server::isUsable()->get()->sortBy('name'));
         $this->buildServers = Server::isUsableBuildServer()->get()->sortBy('name');
         $this->allServers = $this->servers->concat($this->buildServers);
         $this->onlyBuildServerAvailable = $this->servers->isEmpty() && $this->buildServers->isNotEmpty();

@@ -7,6 +7,8 @@ use App\Models\LocalPersistentVolume;
 use App\Models\ScheduledVolumeBackup;
 use App\Models\ScheduledVolumeBackupExecution;
 use App\Models\Server;
+use App\Notifications\VolumeBackup\BackupFailed;
+use App\Notifications\VolumeBackup\BackupSuccess;
 use App\Rules\SafeWebhookUrl;
 use App\Services\ScheduledJobDeliveryService;
 use App\Support\BackupCompression;
@@ -238,6 +240,8 @@ class VolumeBackupJob implements ShouldBeEncrypted, ShouldQueue
             $this->execution->update(['finished_at' => now()]);
             BackupCreated::dispatch($team->id);
         }
+
+        $team->notify(new BackupSuccess($this->backup, $warning));
     }
 
     public function failed(?Throwable $exception): void
@@ -277,6 +281,11 @@ class VolumeBackupJob implements ShouldBeEncrypted, ShouldQueue
                 'local_storage_deleted' => $localStorageDeleted,
             ]);
         }
+
+        $this->backup->team?->notify(new BackupFailed(
+            $this->backup,
+            $exception?->getMessage() ?? 'Volume backup timed out or was terminated.',
+        ));
     }
 
     /**
@@ -363,7 +372,7 @@ class VolumeBackupJob implements ShouldBeEncrypted, ShouldQueue
                     .escapeshellarg($backupLocation.':'.$backupLocation.':ro').' '.escapeshellarg($image),
                 'docker exec '.escapeshellarg($containerName).' mc alias set'.$resolveOptions.' temporary '
                     .escapeshellarg($s3->endpoint).' '.escapeshellarg($s3->key).' '.escapeshellarg($s3->secret),
-                'docker exec '.escapeshellarg($containerName).' mc cp '.escapeshellarg($backupLocation).' '
+                'docker exec '.escapeshellarg($containerName).' mc cp'.$resolveOptions.' '.escapeshellarg($backupLocation).' '
                     .escapeshellarg('temporary/'.$s3->bucket.$backupDirectory.'/'),
             ], $server, timeout: $this->timeout, disableMultiplexing: true);
         } finally {

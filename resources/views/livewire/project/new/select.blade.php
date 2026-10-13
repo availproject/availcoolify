@@ -45,8 +45,8 @@
                 </div>
             </x-application.settings-section>
 
-            <div x-show="loading" class="flex items-center justify-center py-8">
-                <x-loading text="Loading resources..." />
+            <div x-show="loading" class="mt-6">
+                <x-skeleton.cards :count="6" label="Loading resources" />
             </div>
             <div x-show="!loading" class="mt-6 flex flex-col gap-6">
                 <section
@@ -550,8 +550,10 @@
                                 cannot host resources.</span>
                         </span>
                         <x-status-badge status="exited" text="Build only" />
+                        @if (availCanOpenRoute('server.show'))
                         <a href="{{ route('server.show', ['server_uuid' => $buildServer->uuid]) }}"
                             {{ wireNavigate() }} class="button">Settings</a>
+                        @endif
                     </div>
                 @endforeach
             </div>

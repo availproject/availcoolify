@@ -16,6 +16,7 @@
     @elseif (!$resource->destination->server->isMetricsEnabled())
         <x-application.settings-section id="metrics-overview-section" title="Metrics"
             helper="Inspect CPU and memory usage for this application.">
+            @if (availCanOpenRoute('server.metrics'))
             <x-slot:actions>
                 <a class="button"
                     href="{{ route('server.metrics', ['server_uuid' => $resource->destination->server->uuid]) }}"
@@ -24,6 +25,7 @@
                     <x-external-link />
                 </a>
             </x-slot:actions>
+            @endif
             <x-empty size="sm" title="Metrics are not enabled"
                 description="Enable metrics for this server before collecting application usage data."
                 icon-name="dashboard" />

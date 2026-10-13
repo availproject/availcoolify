@@ -6,6 +6,7 @@ use App\Jobs\ApiTokenExpirationWarningJob;
 use App\Jobs\CheckForUpdatesJob;
 use App\Jobs\CheckHelperImageJob;
 use App\Jobs\CheckMissingDatabaseBackupsJob;
+use App\Jobs\CheckMissingVolumeBackupsJob;
 use App\Jobs\CleanupInstanceStuffsJob;
 use App\Jobs\CleanupOrphanedPreviewContainersJob;
 use App\Jobs\CleanupStaleMultiplexedConnections;
@@ -69,6 +70,7 @@ class Kernel extends ConsoleKernel
         // Avail: "guest access ends soon / has ended" emails (no-op until email is configured).
         $this->scheduleInstance->job(new \App\Jobs\AvailGuestAccessExpiryJob)->hourly()->onOneServer();
         $this->scheduleInstance->job(new CheckMissingDatabaseBackupsJob)->hourly()->onOneServer();
+        $this->scheduleInstance->job(new CheckMissingVolumeBackupsJob)->hourly()->onOneServer();
         $this->scheduleInstance->job(new RevalidateUnusableS3StoragesJob)->hourly()->onOneServer();
         $this->scheduleInstance->job(new ReconcileGithubRunnersJob)->everyMinute()->onOneServer();
 

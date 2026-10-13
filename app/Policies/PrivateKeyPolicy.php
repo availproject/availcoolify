@@ -39,9 +39,8 @@ class PrivateKeyPolicy
      */
     public function create(User $user): bool
     {
-        // Only admins/owners can create private keys
-        // Members should not be able to create SSH keys that could be used for deployments
-        return $user->isAdmin();
+        // Avail: owner only (availAreaRoutes()); also reachable from the Ctrl+K modal.
+        return availIsTeamOwner($user);
     }
 
     /**

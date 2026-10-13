@@ -208,17 +208,17 @@ class CleanupDocker implements ShouldBeUnique
     }
 
     /**
-     * Avail: remove stopped Coolify-managed containers, except applications, databases,
-     * services and the proxy. Docker's container prune can't express this: it ORs several
-     * `label!=` filters, so every stopped app container matched (e.g. ones kept after
-     * "Restart limit reached") and was deleted.
+     * Build a command that removes stopped Coolify containers, except the proxy and the
+     * containers of databases, applications and services.
+     *
+     * docker container prune only excludes a container that matches all of its label!= filters
+     * together, so we list the stopped containers and filter them by label in the shell.
      */
-    public function buildContainerPruneCommand(): string
+    private function buildContainerPruneCommand(): string
     {
-        return 'docker ps -a --filter "label=coolify.managed=true" --filter status=exited --filter status=created --filter status=dead'
-            .' --format \'{{.ID}}|{{.Label "coolify.type"}}|{{.Label "coolify.proxy"}}\''
-            .' | awk -F"|" \'$2 != "application" && $2 != "database" && $2 != "service" && $3 != "true" { print $1 }\''
-            .' | xargs -r docker rm';
+        return "docker ps -a --filter status=created --filter status=exited --filter status=dead --filter label=coolify.managed=true --format '{{.ID}} coolify.proxy={{.Label \"coolify.proxy\"}} coolify.type={{.Label \"coolify.type\"}}' | ".
+            "grep -v -E 'coolify\.proxy=true |coolify\.type=(database|application|service)$' | ".
+            "awk '{print $1}' | xargs -r docker rm";
     }
 
     /**

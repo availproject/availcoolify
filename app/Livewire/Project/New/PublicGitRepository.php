@@ -95,7 +95,7 @@ class PublicGitRepository extends Component
     public function mount()
     {
         if (isDev()) {
-            $this->repository_url = 'https://github.com/coollabsio/coolify-examples/tree/v4.x';
+            $this->repository_url = 'https://github.com/coollabsio/coolify-examples/tree/main';
             $this->port = 3000;
         }
         $this->parameters = get_route_parameters();
@@ -384,7 +384,7 @@ class PublicGitRepository extends Component
 
             $application->settings->is_static = $this->isStatic;
             $application->settings->save();
-            $fqdn = generateUrl(server: $destination->server, random: $application->uuid);
+            $fqdn = availAppUrl($destination->server, $application);
             $application->fqdn = $fqdn;
             $application->save();
             $this->availCreateSetupEnvironment($application, $setupVariables);

@@ -55,12 +55,17 @@
     {{-- Search is only useful when workspace resources are available --}}
     @if (isSubscribed() || ! isCloud())
         <div class="px-1 pb-3" :class="collapsed && 'lg:px-0'">
+            {{-- On pages with settings or sections the palette also searches the current page --}}
             <button @click="$dispatch('open-global-search')" type="button"
-                :title="'Search (Press / or ' + modKeyLabel + 'K)'"
+                x-data="{ hasPageSearch: false }"
+                x-init="$nextTick(() => hasPageSearch = (window.currentPageSearchItems?.() ?? []).length > 0)"
+                :title="hasPageSearch
+                    ? 'Search this page and everything (Press / or ' + modKeyLabel + 'K, then Tab to switch)'
+                    : 'Search (Press / or ' + modKeyLabel + 'K)'"
                 class="menu-item justify-between !bg-neutral-100 dark:!bg-white/[0.04] hover:!bg-neutral-200 dark:hover:!bg-white/[0.07] !text-fg-faint">
                 <span class="flex items-center gap-2.5 min-w-0">
                     <x-reicon name="search" class="menu-item-icon" />
-                    <span class="menu-item-label" :class="collapsed && 'lg:hidden'">Search</span>
+                    <span class="menu-item-label truncate" :class="collapsed && 'lg:hidden'">Search</span>
                 </span>
                 <kbd class="px-1.5 py-0.5 text-[11px] font-medium text-fg-faint bg-neutral-200 dark:bg-white/[0.06] rounded-md border border-transparent dark:border-white/5"
                     :class="collapsed && 'lg:hidden'" x-text="modKeyLabel + 'K'"></kbd>
@@ -108,10 +113,13 @@
                     </a>
                 </li>
             @endcan
-            {{-- Infrastructure --}}
+            {{-- Infrastructure (Avail: each entry only for those who may open it, availAreaRoutes()) --}}
+            @if (collect(['server.index', 'source.all', 'destination.index', 'registries.index', 'storage.index', 'shared-variables.index'])->contains(fn ($r) => availCanOpenRoute($r)))
             <li class="nav-section mt-3" aria-hidden="true"
                 :class="collapsed && 'lg:mx-2.5 lg:my-2 lg:h-0 lg:overflow-hidden lg:border-t lg:border-neutral-200 lg:p-0 lg:text-transparent dark:lg:border-white/10'">
                 Infrastructure</li>
+            @endif
+            @if (availCanOpenRoute('server.index'))
             <li>
                 <a title="Servers" {{ wireNavigate() }}
                     class="{{ request()->is('server/*') || request()->is('servers') ? 'menu-item menu-item-active' : 'menu-item' }}"
@@ -120,6 +128,8 @@
                     <span class="menu-item-label" :class="collapsed && 'lg:hidden'">Servers</span>
                 </a>
             </li>
+            @endif
+            @if (availCanOpenRoute('source.all'))
             <li>
                 <a title="Sources" {{ wireNavigate() }}
                     class="{{ request()->is('source*') ? 'menu-item-active menu-item' : 'menu-item' }}"
@@ -128,6 +138,8 @@
                     <span class="menu-item-label" :class="collapsed && 'lg:hidden'">Sources</span>
                 </a>
             </li>
+            @endif
+            @if (availCanOpenRoute('destination.index'))
             <li>
                 <a title="Destinations" {{ wireNavigate() }}
                     class="{{ request()->is('destination*') ? 'menu-item-active menu-item' : 'menu-item' }}"
@@ -136,7 +148,8 @@
                     <span class="menu-item-label" :class="collapsed && 'lg:hidden'">Destinations</span>
                 </a>
             </li>
-            @if (auth()->user()?->isAdmin())
+            @endif
+            @if (availCanOpenRoute('registries.index'))
                 <li>
                     <a title="Registries" {{ wireNavigate() }}
                         class="{{ request()->is('registries*') ? 'menu-item-active menu-item' : 'menu-item' }}"
@@ -146,6 +159,7 @@
                     </a>
                 </li>
             @endif
+            @if (availCanOpenRoute('storage.index'))
             <li>
                 <a title="S3 Storage" {{ wireNavigate() }}
                     class="{{ request()->is('storages*') ? 'menu-item-active menu-item' : 'menu-item' }}"
@@ -154,6 +168,8 @@
                     <span class="menu-item-label" :class="collapsed && 'lg:hidden'">S3 Storage</span>
                 </a>
             </li>
+            @endif
+            @if (availCanOpenRoute('shared-variables.index'))
             <li>
                 <a title="Shared variables" {{ wireNavigate() }}
                     class="{{ request()->is('shared-variables*') ? 'menu-item-active menu-item' : 'menu-item' }}"
@@ -162,11 +178,13 @@
                     <span class="menu-item-label" :class="collapsed && 'lg:hidden'">Shared Variables</span>
                 </a>
             </li>
+            @endif
 
             {{-- Manage --}}
             <li class="nav-section mt-3" aria-hidden="true"
                 :class="collapsed && 'lg:mx-2.5 lg:my-2 lg:h-0 lg:overflow-hidden lg:border-t lg:border-neutral-200 lg:p-0 lg:text-transparent dark:lg:border-white/10'">
                 Manage</li>
+            @if (availCanOpenRoute('team.index'))
             <li>
                 <a title="Team" {{ wireNavigate() }}
                     class="{{ request()->is('team*') ? 'menu-item-active menu-item' : 'menu-item' }}"
@@ -175,6 +193,8 @@
                     <span class="menu-item-label" :class="collapsed && 'lg:hidden'">Team</span>
                 </a>
             </li>
+            @endif
+            @if (availCanOpenRoute('notifications.email'))
             <li>
                 <a title="Notifications" {{ wireNavigate() }}
                     class="{{ request()->is('notifications*') ? 'menu-item-active menu-item' : 'menu-item' }}"
@@ -183,11 +203,12 @@
                     <span class="menu-item-label" :class="collapsed && 'lg:hidden'">Notifications</span>
                 </a>
             </li>
+            @endif
 
             <li>
                 <a title="Keys & Tokens" {{ wireNavigate() }}
                     class="{{ request()->is('security*') ? 'menu-item-active menu-item' : 'menu-item' }}"
-                    :class="collapsed && 'lg:justify-center lg:px-0'" href="{{ route('security.private-key.index') }}">
+                    :class="collapsed && 'lg:justify-center lg:px-0'" href="{{ route(availCanOpenRoute('security.private-key.index') ? 'security.private-key.index' : 'security.api-tokens') }}">
                     <x-reicon name="keys" class="menu-item-icon" />
                     <span class="menu-item-label" :class="collapsed && 'lg:hidden'">Keys & Tokens</span>
                 </a>
@@ -210,11 +231,11 @@
                     <span class="menu-item-label" :class="collapsed && 'lg:hidden'">Tags</span>
                 </a>
             </li>
-            @if (isInstanceAdmin())
+            @if (isInstanceAdmin() && (availCanOpenRoute('settings.index') || availCanOpenRoute('settings.access-protection')))
                 <li>
                     <a title="Settings" {{ wireNavigate() }}
                         class="{{ request()->is('settings*') ? 'menu-item-active menu-item' : 'menu-item' }}"
-                        :class="collapsed && 'lg:justify-center lg:px-0'" href="{{ route('settings.index') }}">
+                        :class="collapsed && 'lg:justify-center lg:px-0'" href="{{ route(availCanOpenRoute('settings.index') ? 'settings.index' : 'settings.access-protection') }}">
                         <x-reicon name="settings" class="menu-item-icon" />
                         <span class="menu-item-label" :class="collapsed && 'lg:hidden'">Settings</span>
                     </a>
@@ -259,13 +280,13 @@
         @if ($deploymentsIndicator)
             <livewire:deployments-indicator variant="sidebar" />
         @endif
-        <div class="flex items-center gap-1" :class="collapsed ? 'flex-col-reverse justify-center' : 'justify-between'">
+        <div class="flex items-center gap-1" :class="collapsed ? 'flex-col justify-center' : 'justify-between'">
             <x-top-user-menu sidebar />
             <button type="button" @click="toggleSidebar()" title="Toggle sidebar" aria-label="Toggle sidebar"
                 class="menu-item sidebar-toggle w-8 shrink-0 justify-center px-0">
                 <svg class="menu-item-icon" viewBox="0 0 24 24" fill="none">
-                    <rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" stroke-width="1.6" />
-                    <path d="M9 4v16" stroke="currentColor" stroke-width="1.6" />
+                    <rect x="3" y="5" width="18" height="14" rx="4" stroke="currentColor" stroke-width="1.6" />
+                    <path d="M16 9v6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
                 </svg>
             </button>
         </div>

@@ -30,7 +30,10 @@
             'active' => request()->routeIs('security.api-tokens'),
             'icon' => 'code',
         ],
-    ])->filter();
+    ])->filter()
+        // Avail: private keys, cloud and integration tokens and cloud-init scripts are owner only.
+        ->filter(fn ($item) => availCanOpenRoute($item['route']))
+        ->values();
 @endphp
 
 <section class="application-settings-workspace w-full max-w-none">
@@ -39,7 +42,8 @@
         <p class="settings-mobile-description">Manage SSH keys, cloud credentials, and API access tokens.</p>
     </header>
     <div class="grid min-w-0 gap-8 xl:grid-cols-[210px_minmax(0,1fr)] xl:gap-8">
-        <aside class="application-settings-navigation min-w-0 xl:self-start">
+        <aside class="application-settings-navigation min-w-0 xl:self-start"
+            data-settings-search-items="{{ json_encode(settingsSearchItems(['Keys & Tokens' => $securityMenuItems], [])) }}">
             <nav aria-label="Keys and tokens"
                 class="grid grid-cols-2 gap-0.5 border-y border-neutral-200 py-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-1 xl:border-y-0 xl:py-0 dark:border-white/[0.06]">
                 <div class="nav-section hidden xl:block">Keys & Tokens</div>

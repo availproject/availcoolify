@@ -1,6 +1,6 @@
 AvailCoolify is our self-hosted deploy platform, a customised Coolify. Push to GitHub and it builds and runs your app over HTTPS; open a pull request and it spins up a private preview.
 
-- **Dashboard:** [coolify.avail.tools](https://coolify.avail.tools)
+- **Dashboard:** [deploy.avail.so](https://deploy.avail.so)
 - **Sign-in:** Clerk only (the same Clerk account as HQ). There is no password login.
 - **Owner:** the owner of Avail Team (see **Team → Members**) runs the platform. Ask the Owner for new projects, role changes or anything broken.
 
@@ -12,7 +12,7 @@ Anyone else (partners, contractors, auditors) needs an invitation from an admin.
 
 ![Sign-in page with the Login with Clerk button](/images/developer-guide/login.jpg)
 
-1. Open [coolify.avail.tools](https://coolify.avail.tools) and click **Login with Clerk**. You always get a fresh sign-in screen, so pick the right account.
+1. Open [deploy.avail.so](https://deploy.avail.so) and click **Login with Clerk**. You always get a fresh sign-in screen, so pick the right account.
 2. You land on the dashboard of **Avail Team**: projects first, then recent deployments (the latest one per app). Guests see only the projects shared with them.
 3. Need more than a member can do? Ask the Owner or an admin to change your role under **Team → Members**.
 
@@ -21,9 +21,9 @@ Anyone else (partners, contractors, auditors) needs an invitation from an admin.
 | Role | Can do |
 | --- | --- |
 | Guest | View only the projects an admin shared with them: their apps, deployments and build logs. Read-only, no API access, and usually time-limited (30 days by default) |
-| Member | View apps, deployments and build logs; create apps (public repo, your own GitHub repos, Dockerfile, image); deploy, redeploy, restart, stop and roll back apps; for apps you created: runtime logs, environment variables, delete, and their settings (branch, build pack, commands, port, health check, `*.apps.avail.tools` address) |
-| Admin | Everything a member can, plus app settings, env vars, web terminal, databases, services, projects and environments, and managing team members |
-| Owner | Everything an admin can, plus creating teams and upgrading the platform |
+| Member | View apps, deployments, build logs and the team (read-only); create apps (public repo, your own GitHub repos, Dockerfile, image); deploy, redeploy, restart, stop and roll back apps; for apps you created: runtime logs, environment variables, delete, and their settings (branch, build pack, commands, port, health check, `*.apps.avail.so` address) |
+| Admin | Everything a member can, plus every app's settings and env vars, databases, services, projects and environments, shared variables, **Settings → Access protection** and **Guest access**, and managing team members |
+| Owner | Everything an admin can, plus the platform itself: servers and the web terminal, sources, destinations, registries, S3 storage, notifications, SSH keys and cloud tokens, the other **Settings** pages, creating teams and upgrading |
 
 Projects and environments are created by admins. Two-factor is handled by Clerk, not in the profile.
 
@@ -50,15 +50,18 @@ A public repository also works without the GitHub app: **+ New resource** → **
 
 - **Missing account or org:** use **+ Install on a GitHub account or organisation** (org installs need an org owner on GitHub).
 - **Missing repo:** use **Adjust repository access** and add it to the installation.
+- **Server:** new apps and databases go to the app server; with one app server you never see a server choice. Only the Owner can put something on the Coolify host itself.
 - **Build:** apps build with Railpack, which detects the language from the repo. A Dockerfile can be used instead (app → Configuration → Build Pack). Docker Compose is admin-only.
 - **Changing settings later:** on apps you created you can change the branch, build pack, commands, directories, port, health check and pre/post-deploy commands yourself. Custom Docker options, container labels, port mappings, persistent storage and the repository itself stay with admins.
 - **Manual deploy:** open the app → **Deploy** (or **Redeploy**). Use **Restart** when only the container needs restarting, not a rebuild.
 
 ![Application page with its URL and the Deploy button](/images/developer-guide/app-general.jpg)
 
-**App URLs** are `https://<name>.apps.avail.tools` with a real certificate, e.g. `https://nexus-fast-bridge.apps.avail.tools`. New apps start with a random name. You can rename your app's address under **Domains** (then redeploy) to any free `https://<name>.apps.avail.tools`: one name of letters, digits and dashes, not used by another app. Other domains need an admin.
+**App URLs** are `https://<name>.apps.avail.so` with a real certificate. New apps get `<repo>-<6 characters>-<environment>`, for example `https://nexus-fast-bridge-p5zgek-prod.apps.avail.so` (`prod` for production, `stag` for staging). You can rename your app's address under **Domains** (then redeploy) to any free `https://<name>.apps.avail.so`: one name of letters, digits and dashes, not used by another app. Other domains need an admin.
 
 **App owner:** the **App Owner** column in an environment's resource list and in the dashboard's deployment tables shows who created each app. Use **Filter → App Owners** to see only one person's apps. Databases, services and apps created before owners were recorded show `-`.
+
+**Handing an app over:** app → **General** → **App owner** → **Transfer to** another member, admin or the Owner (never a guest). The new app owner gets the app's settings, variables, runtime logs and delete; the previous one loses them. Admins and the Owner can transfer any app, an app owner their own. Every transfer is recorded under **Team → Audit log**.
 
 **Deployment log:** app → **Deployment Logs** lists every run; open one to see each build and start step.
 
@@ -69,7 +72,7 @@ A public repository also works without the GitHub app: **+ New resource** → **
 Every pull request gets its own private preview URL, behind a Clerk login that only lets members of the team in (and guests who have that project).
 
 1. **Open a PR** against the app's repo. AvailCoolify builds the PR branch, comments on the PR with the preview link, and adds an **AvailCoolify preview** check that turns green ("Preview ready") when it's up.
-2. **Preview URL:** `https://<PR number>.<app>.apps.avail.tools`, e.g. PR 7 → `7.nexus-fast-bridge.apps.avail.tools`.
+2. **Preview URL:** `https://<PR number>.<app address>`, e.g. PR 7 → `https://7.nexus-fast-bridge-p5zgek-prod.apps.avail.so`.
 3. **Push more commits** to the PR: the preview rebuilds.
 4. **Close or merge the PR:** the preview is removed.
 
@@ -173,7 +176,7 @@ Start with the deployment log for build problems and **Runtime Logs** for proble
 
 - **Deployment log:** app → **Deployment Logs** → pick the run.
 - **Runtime logs:** app → **Runtime Logs**. Live stdout/stderr of the running app. They can contain secrets, so members only see them for apps they created; admins see all. Guests see deployment logs only.
-- **Web terminal:** app → **Terminal** opens a shell inside the container (Admin role).
+- **Web terminal:** app → **Terminal** opens a shell inside the container (Owner only).
 
 | Symptom | Likely cause | Fix |
 | --- | --- | --- |
@@ -193,6 +196,6 @@ Start with the deployment log for build problems and **Runtime Logs** for proble
 The platform itself is managed by the Owner; developers manage their own apps.
 
 - **Security and domain changes need a redeploy** to reach the running app (access protection, domains, ports, labels).
-- **Everything runs on one server** (8 GB RAM) shared by builds and all apps. Avoid parallel heavy builds, and ask before adding memory-hungry services.
+- **All apps and their builds share one app server.** Avoid parallel heavy builds, and ask before adding memory-hungry services.
 - **Backups aren't set up yet.** Don't keep data you can't lose in app databases on this platform for now.
 - **Docs:** the upstream [Coolify docs](https://coolify.io/docs) (account menu → Documentation) cover the general features; this guide covers what's specific to us.

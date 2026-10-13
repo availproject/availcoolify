@@ -255,7 +255,8 @@ test('Settings > Guest access is for admins only', function () {
     $member->teams()->attach(0, ['role' => 'member']);
     guestActAs($member);
 
-    $this->get(route('settings.guest-access'))->assertRedirect(route('dashboard'));
+    // The admin-only page refuses members (availAreaRoutes()).
+    $this->get(route('settings.guest-access'))->assertForbidden();
 
     guestActAs($this->admin);
     $component = Livewire::test(SettingsGuestAccess::class);

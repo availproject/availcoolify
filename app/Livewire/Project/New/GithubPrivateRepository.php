@@ -327,7 +327,7 @@ class GithubPrivateRepository extends Component
             if ($this->build_pack === 'dockercompose') {
                 $application['docker_compose_location'] = $this->docker_compose_location;
             }
-            $fqdn = generateUrl(server: $destination->server, random: $application->uuid);
+            $fqdn = availAppUrl($destination->server, $application);
             $application->fqdn = $fqdn;
 
             $application->name = generate_application_name($this->selected_repository_owner.'/'.$this->selected_repository_repo, $this->selected_branch_name, $application->uuid);

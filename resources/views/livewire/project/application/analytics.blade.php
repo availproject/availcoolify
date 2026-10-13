@@ -16,7 +16,7 @@ $approxBadge = fn (string $tooltip) => '<span title="'.e($tooltip).'" class="ml-
     @if (! $enabled)
         <x-application.settings-section id="analytics-section" title="Analytics"
             helper="Inspect traffic statistics reported by Sentinel.">
-            @if ($analyticsServerUuid)
+            @if ($analyticsServerUuid && availCanOpenRoute('server.analytics'))
                 <x-slot:actions>
                     <a class="button" href="{{ route('server.analytics', ['server_uuid' => $analyticsServerUuid]) }}"
                         {{ wireNavigate() }}>
@@ -214,12 +214,15 @@ $approxBadge = fn (string $tooltip) => '<span title="'.e($tooltip).'" class="ml-
                 'rows' => data_get($breakdowns, 'agent', []),
                 'helper' => 'Bot and AI-crawler traffic (GPTBot, ClaudeBot, Googlebot, …) by request count.',
             ])
-            @include('livewire.traffic._breakdown-section', [
-                'dimension' => 'ip',
-                'label' => 'Top IPs',
-                'rows' => data_get($breakdowns, 'ip', []),
-                'helper' => 'Busiest client IPs (real visitor IP, resolved behind Cloudflare / reverse proxies).',
-            ])
+            @php($ipModeEnum = \App\Enums\TrafficIpMode::tryFrom($ipMode) ?? \App\Enums\TrafficIpMode::Full)
+            @if ($ipModeEnum !== \App\Enums\TrafficIpMode::Off)
+                @include('livewire.traffic._breakdown-section', [
+                    'dimension' => 'ip',
+                    'label' => $ipModeEnum->breakdownLabel(),
+                    'rows' => data_get($breakdowns, 'ip', []),
+                    'helper' => $ipModeEnum->breakdownHelper(),
+                ])
+            @endif
         </div>
 
         {{-- User agents (full width — raw UA strings are long). --}}

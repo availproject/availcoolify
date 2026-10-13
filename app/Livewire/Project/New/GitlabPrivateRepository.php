@@ -213,7 +213,7 @@ class GitlabPrivateRepository extends Component
             if ($this->build_pack === 'dockercompose') {
                 $application['docker_compose_location'] = $this->docker_compose_location;
             }
-            $fqdn = generateUrl(server: $destination->server, random: $application->uuid);
+            $fqdn = availAppUrl($destination->server, $application);
             $application->fqdn = $fqdn;
             $application->name = generate_application_name($this->selected_repository_path, $this->selected_branch_name, $application->uuid);
             $application->save();
