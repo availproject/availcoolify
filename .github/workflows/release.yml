@@ -237,7 +237,7 @@ jobs:
           previous="$(remote "$PROD_CONTROL_PLANE_NODE" 'cat /data/coolify/source/.avail-previous-image')"
           echo "previous=$previous" >>"$GITHUB_OUTPUT"
 
-      - name: Configure the instance (settings, Clerk, Traefik trusted IPs)
+      - name: Configure the instance (settings, Clerk, email, Traefik trusted IPs)
         if: env.ACTION != 'rollback'
         env:
           AVAIL_DASHBOARD_URL: ${{ env.PROD_DASHBOARD_URL }}
@@ -252,8 +252,8 @@ jobs:
           # shellcheck disable=SC2016
           remote "$PROD_CONTROL_PLANE_NODE" 'for i in $(seq 60); do [ "$(docker inspect -f "{{.State.Health.Status}}" coolify 2>/dev/null)" = healthy ] && exit 0; sleep 5; done; echo "coolify did not become healthy" >&2; exit 1'
           # shellcheck disable=SC2016
-          REMOTE_ENV="AVAIL_DASHBOARD_URL AVAIL_APPS_WILDCARD AVAIL_SSH_PORT AVAIL_TRUST_CLOUDFLARE CLERK_CLIENT_ID CLERK_CLIENT_SECRET CLERK_BASE_URL" \
-            remote_env "$PROD_CONTROL_PLANE_NODE" 'f=$(mktemp); env | grep -E "^(AVAIL_|CLERK_)" >"$f"; docker exec -i --env-file "$f" coolify php < '"$RELEASE_DIR"'/scripts/prod/configure-instance.php; rc=$?; rm -f "$f"; exit $rc'
+          REMOTE_ENV="AVAIL_DASHBOARD_URL AVAIL_APPS_WILDCARD AVAIL_SSH_PORT AVAIL_TRUST_CLOUDFLARE CLERK_CLIENT_ID CLERK_CLIENT_SECRET CLERK_BASE_URL CF_EMAIL_TOKEN" \
+            remote_env "$PROD_CONTROL_PLANE_NODE" 'f=$(mktemp); env | grep -E "^(AVAIL_|CLERK_|CF_EMAIL_TOKEN=)" >"$f"; docker exec -i --env-file "$f" coolify php < '"$RELEASE_DIR"'/scripts/prod/configure-instance.php; rc=$?; rm -f "$f"; exit $rc'
 
       # Coolify validates its own server only once, on first boot; if that failed, no proxy ever starts and the
       # dashboard is unreachable (Cloudflare 521). Validate it and start the proxy when it is not running.

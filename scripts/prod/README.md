@@ -242,6 +242,7 @@ Each is a SecureString under the prefix; the last path segment is the variable n
 | `DATABASE_URL` | provision | `postgres://user:pass@host:port/coolify?sslmode=require`. Percent-encode special characters in the password (`@` is `%40`) |
 | `CLERK_CLIENT_ID`, `CLERK_CLIENT_SECRET`, `CLERK_BASE_URL` | provision (required), deploy (applied if present) | Clerk OAuth app. The base URL is required since 4.4.0 |
 | `SLACK_WEBHOOK_URL` | optional | deploy results go to this channel |
+| `CF_EMAIL_TOKEN` | optional | Cloudflare **account** API token with only *Email Sending: Edit*, IP-restricted to the control plane's public IP. Deploys turn on Coolify's transactional email over Cloudflare's SMTP (`smtp.mx.cloudflare.net:465`, TLS, user `api_token`), sent as `noreply@notify.avail.so`. The sending subdomain `notify.avail.so` is set up once in Cloudflare Email Sending |
 | `SIGNOZ_OTLP_ENDPOINT` | optional | e.g. `https://otel2.avail.so` (no ingestion key); without it no log and metrics collector is started |
 | `APP_KEY` | optional | reuse an existing key when rebuilding a VM; otherwise generated on first provision |
 | `DB_CA_CERT` | optional | PEM of the provider's CA, for `sslmode=verify-full`; written to `/data/coolify/ssh/db-ca.pem` |
