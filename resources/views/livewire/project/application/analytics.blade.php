@@ -16,7 +16,7 @@ $approxBadge = fn (string $tooltip) => '<span title="'.e($tooltip).'" class="ml-
     @if (! $enabled)
         <x-application.settings-section id="analytics-section" title="Analytics"
             helper="Inspect traffic statistics reported by Sentinel.">
-            @if ($analyticsServerUuid)
+            @if ($analyticsServerUuid && availCanOpenRoute('server.analytics'))
                 <x-slot:actions>
                     <a class="button" href="{{ route('server.analytics', ['server_uuid' => $analyticsServerUuid]) }}"
                         {{ wireNavigate() }}>

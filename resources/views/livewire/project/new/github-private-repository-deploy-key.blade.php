@@ -29,11 +29,13 @@
                     <x-empty title="No private keys"
                         description="Create an SSH key before connecting a private repository."
                         icon-name="keys">
+                        @if (availCanOpenRoute('security.private-key.index'))
                         <x-slot:contents>
                             <a class="button" href="{{ route('security.private-key.index') }}" {{ wireNavigate() }}>
                                 Create private key
                             </a>
                         </x-slot:contents>
+                        @endif
                     </x-empty>
                 @endforelse
             </div>

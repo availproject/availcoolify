@@ -151,11 +151,13 @@
                                 <x-empty title="No other sources"
                                     description="Connect another Git source before moving this application."
                                     icon-name="sources" size="sm">
+                                    @if (availCanOpenRoute('source.all'))
                                     <x-slot:contents>
                                         <a href="{{ route('source.all') }}" {{ wireNavigate() }} class="button">
                                             Connect source
                                         </a>
                                     </x-slot:contents>
+                                    @endif
                                 </x-empty>
                             </div>
                         @endif
@@ -164,10 +166,12 @@
                 @if ($currentSource && $sources->isEmpty())
                     <p class="mt-3 text-[12px] leading-5 text-neutral-500 dark:text-fg-dim">
                         No other sources available.
+                        @if (availCanOpenRoute('source.all'))
                         <a href="{{ route('source.all') }}" {{ wireNavigate() }}
                             class="font-medium text-coollabs underline-offset-2 hover:underline dark:text-warning">Connect
                             another source</a>
                         to switch providers.
+                        @endif
                     </p>
                 @endif
             </x-application.settings-section>
