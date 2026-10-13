@@ -6,13 +6,13 @@
 
 **Avail's self-hosted deploy platform: a customised fork of [Coolify](https://github.com/coollabsio/coolify).**
 
-[Dashboard](https://coolify.avail.tools) · [Upstream Coolify](https://github.com/coollabsio/coolify) · [Coolify docs](https://coolify.io/docs)
+[Dashboard](https://deploy.avail.so) · [Upstream Coolify](https://github.com/coollabsio/coolify) · [Coolify docs](https://coolify.io/docs)
 
 </div>
 
 ## What it is
 
-Developers push to GitHub and AvailCoolify builds and runs the app at `https://<app>.apps.avail.tools`. Every pull request gets a private preview behind the Clerk login. The in-app **Developer Guide** (account menu → Developer Guide) explains day-to-day use with screenshots.
+Developers push to GitHub and AvailCoolify builds and runs the app at `https://<repo>-<id>-<env>.apps.avail.so`. Every pull request gets a private preview behind the Clerk login. The in-app **Developer Guide** (account menu → Developer Guide) explains day-to-day use with screenshots.
 
 ## What's different from Coolify
 
@@ -20,8 +20,10 @@ Developers push to GitHub and AvailCoolify builds and runs the app at `https://<
 | --- | --- |
 | Sign-in | Clerk only. Password login, Coolify 2FA and the other OAuth providers are removed from the UI. |
 | Teams | One **Avail Team**, no personal teams. Clerk users with an `@availproject.org` email (`AVAIL_AUTO_JOIN_DOMAINS`) join it as members automatically; everyone else needs an invitation and sees "Waiting for an invitation" until they accept one. Removing someone sticks: they don't rejoin on their next sign-in until an admin lets them back in. Only the Avail Team owner can create teams or upgrade the platform. |
-| Roles | **Guest:** read-only, and only the projects shared with them. **Member:** can create apps (public repo, their own GitHub repos, Dockerfile, image), deploy, restart, stop and roll back them, delete apps they created, and manage those apps' environment variables (not shared-variable references) and everyday settings: branch, build pack, commands, port, health check and a free `<name>.apps.avail.tools` address. Docker Compose, custom Docker options and labels stay admin-only. **Admin:** settings, env vars, terminal, databases, services, projects and members. **Owner:** everything, plus teams and upgrades. |
+| Roles | **Guest:** read-only, and only the projects shared with them. **Member:** can create apps (public repo, their own GitHub repos, Dockerfile, image), deploy, restart, stop and roll back them, delete apps they created, and manage those apps' environment variables (not shared-variable references) and everyday settings: branch, build pack, commands, port, health check and a free `<name>.apps.avail.so` address. Members see the team read-only. Docker Compose, custom Docker options and labels stay admin-only. **Admin:** every app's settings and env vars, databases, services, projects, shared variables, members, Settings → Access protection and Guest access. **Owner:** the platform: servers, terminals, sources, destinations, registries, S3 storage, notifications, SSH keys and cloud tokens, the other Settings pages, teams and upgrades. One list, `bootstrap/helpers/avail-owner-areas.php`, drives the menus, the pages, Livewire calls and the API. |
 | Guests | Invitations default to Guest, with access for 30, 60 or 90 days, until a date, or without expiry, counted from acceptance. Admins tick which projects each guest sees in **Settings → Guest access** or a project's settings. Guests can't use the API, and their previews open only for their projects. Expired guests see "Your guest access has ended". Guests get an email 7 days before and when their access ends, once transactional email is configured. |
+| App URLs | New apps get `https://<repo>-<first 6 characters of the app id>-<environment>.<wildcard>`, with `prod` for production and `stag` for staging, e.g. `https://nexus-fast-bridge-p5zgek-prod.apps.avail.so`. Docker image apps use the image name. Existing apps, Compose apps and one-click services keep their URLs. |
+| App owner | Each app shows its owner (the creator) in the resource list and under app → General → App owner, where admins, the Owner or the app owner can transfer it to another member, admin or the Owner (never a guest). Transfers are in the audit log. |
 | GitHub | Vercel-style **Continue with GitHub**: one platform GitHub App; each user connects their account and only sees repositories they can push to. Uninstalled or suspended installations stop deploys. |
 | Previews | PR previews always sit behind a Clerk login (Traefik ForwardAuth), and each PR gets an "AvailCoolify preview" status check. |
 | Access protection | One switch per environment (Settings → Access protection) puts every app in it behind the Clerk login, e.g. staging on, production off. |
@@ -40,13 +42,15 @@ Syncing with upstream:
 
 ```bash
 git checkout main && git fetch upstream && git merge --ff-only upstream/main && git push origin main
-git checkout avail && git rebase main          # resolve conflicts, run the tests
-git push --force-with-lease origin avail
+git checkout -b sync/<date> avail && git rebase main   # resolve conflicts, run the tests
+git push origin sync/<date>                           # then a pull request to avail
 ```
+
+Branch protection on `avail` requires the **Tests** check (`test.yml`), which runs on pull requests, so changes reach `avail` through a pull request, not a direct push. A rebased sync branch is not a fast-forward of `avail`: merge it with "Rebase and merge", or have an org admin allow a one-off force-push.
 
 ## Deploying
 
-The server runs a local image built from `avail`, not the official Coolify image, and Coolify's auto-update is off. Don't use the dashboard's Upgrade button; upgrade by syncing upstream and redeploying.
+AvailCoolify runs an image built from `avail`, not the official Coolify image, and Coolify's auto-update is off. `deploy-custom.sh` below is for a single test server; production goes through `release.yml` (next section). Don't use the dashboard's Upgrade button; upgrade by syncing upstream and redeploying.
 
 ```bash
 ./scripts/deploy-custom.sh                              # build HEAD of avail and deploy it  
@@ -57,7 +61,7 @@ The script builds `docker/production/Dockerfile`, pins the image in `docker-comp
 
 ### Production
 
-Production is not deployed by hand with that script. `.github/workflows/release.yml` runs the tests, pushes the image to the DigitalOcean registry and deploys it through Teleport, with its secrets in AWS SSM and no SSH keys in GitHub. The one-time setup, the variables and parameters it needs, and how to roll back are in [`scripts/prod/README.md`](scripts/prod/README.md).
+Production (`https://deploy.avail.so`) is not deployed by hand with that script. `.github/workflows/test.yml` runs the tests on every pull request to `avail`. `.github/workflows/release.yml` builds and pushes the image to the DigitalOcean registry on every push to `avail`, and deploys, provisions or rolls back only from a manual run that the `production` environment's reviewer approves, through Teleport, with its secrets in AWS SSM and no SSH keys in GitHub. The one-time setup, the variables and parameters it needs, and how to roll back are in [`scripts/prod/README.md`](scripts/prod/README.md).
 
 ## Tests
 
@@ -67,7 +71,7 @@ Our tests are the `tests/Feature/Avail*.php` files plus the updated upstream tes
 vendor/bin/pest tests/Feature/Avail*.php
 ```
 
-A few upstream tests fail by design, because the feature they cover is removed here (for example password login and the forgot-password link). The CI gate runs the whole suite minus the files and tests listed, each with a reason, in `tests/avail-ci-skip.txt`.
+A few upstream tests fail by design, because the feature they cover is removed or restricted here (for example password login, or admins opening server and settings pages that are now owner-only). The CI gate runs the whole suite minus the files and tests listed, each with a reason, in `tests/avail-ci-skip.txt`.
 
 ## Upstream
 
