@@ -187,6 +187,7 @@
         $pageSections = [
             'project.application.configuration' => array_values(array_filter([
                 ['id' => 'application-details-section', 'label' => 'Application details'],
+                ['id' => 'app-owner-section', 'label' => 'App owner'],
                 ['id' => 'access-section', 'label' => 'Access'],
                 ['id' => 'build-pipeline-section', 'label' => 'Build pipeline'],
                 $isComposeApp ? null : ['id' => 'container-image-section', 'label' => 'Container image'],

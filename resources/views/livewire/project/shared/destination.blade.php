@@ -34,8 +34,10 @@
                     </div>
 
                     <div class="flex flex-wrap items-center gap-2 sm:justify-end">
+                        @if (availCanOpenRoute('server.show'))
                         <a href="{{ route('server.show', ['server_uuid' => data_get($resource, 'destination.server.uuid')]) }}"
                             {{ wireNavigate() }} class="button">Open server</a>
+                        @endif
                         <x-application.restart-limit-warning :application="$resource" />
                         @if ($hasAdditionalDestinations)
                             @can('deploy', $resource)
@@ -103,8 +105,10 @@
                                 </div>
 
                                 <div class="flex flex-wrap items-center gap-2 lg:justify-end">
+                                    @if (availCanOpenRoute('server.show'))
                                     <a href="{{ route('server.show', ['server_uuid' => data_get($destination, 'server.uuid')]) }}"
                                         {{ wireNavigate() }} class="button">Open server</a>
+                                    @endif
                                     @can('deploy', $resource)
                                         <div class="relative" x-data="{ open: false }" @click.outside="open = false"
                                             @keydown.escape.window="open = false">
@@ -256,8 +260,10 @@
                     </div>
 
                     <div class="flex flex-wrap items-center gap-2 sm:justify-end">
+                        @if (availCanOpenRoute('server.show'))
                         <a href="{{ route('server.show', ['server_uuid' => data_get($resource, 'destination.server.uuid')]) }}"
                             {{ wireNavigate() }} class="button">Open server</a>
+                        @endif
                         @if (method_exists($resource, 'stoppedAfterRestartLimit'))
                             <x-application.restart-limit-warning :application="$resource" />
                         @endif

@@ -13,6 +13,11 @@
             ['label' => 'Guest access', 'route' => 'settings.guest-access', 'icon' => 'teams'],
         ],
     ];
+    // Avail: owner-only sections are left out for admins (availAreaRoutes()).
+    $settingsMenuSections = collect($settingsMenuSections)
+        ->map(fn ($items) => array_values(array_filter($items, fn ($item) => availCanOpenRoute($item['route']))))
+        ->filter()
+        ->all();
 @endphp
 
 <section class="application-settings-workspace w-full max-w-none">

@@ -540,8 +540,10 @@
                                 cannot host resources.</span>
                         </span>
                         <x-status-badge status="exited" text="Build only" />
+                        @if (availCanOpenRoute('server.show'))
                         <a href="{{ route('server.show', ['server_uuid' => $buildServer->uuid]) }}"
                             {{ wireNavigate() }} class="button">Settings</a>
+                        @endif
                     </div>
                 @endforeach
             </div>

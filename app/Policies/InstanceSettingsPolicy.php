@@ -20,6 +20,7 @@ class InstanceSettingsPolicy
      */
     public function update(User $user, InstanceSettings $settings): bool
     {
-        return isInstanceAdmin();
+        // Avail: instance settings are for the owner of Avail Team.
+        return availMeetsArea($user, 'platform');
     }
 }

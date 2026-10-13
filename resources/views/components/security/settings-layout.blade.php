@@ -30,7 +30,10 @@
             'active' => request()->routeIs('security.api-tokens'),
             'icon' => 'code',
         ],
-    ])->filter();
+    ])->filter()
+        // Avail: private keys, cloud and integration tokens and cloud-init scripts are owner only.
+        ->filter(fn ($item) => availCanOpenRoute($item['route']))
+        ->values();
 @endphp
 
 <section class="application-settings-workspace w-full max-w-none">

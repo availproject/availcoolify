@@ -21,9 +21,9 @@ Anyone else (partners, contractors, auditors) needs an invitation from an admin.
 | Role | Can do |
 | --- | --- |
 | Guest | View only the projects an admin shared with them: their apps, deployments and build logs. Read-only, no API access, and usually time-limited (30 days by default) |
-| Member | View apps, deployments and build logs; create apps (public repo, your own GitHub repos, Dockerfile, image); deploy, redeploy, restart, stop and roll back apps; for apps you created: runtime logs, environment variables, delete, and their settings (branch, build pack, commands, port, health check, `*.apps.avail.tools` address) |
-| Admin | Everything a member can, plus app settings, env vars, web terminal, databases, services, projects and environments, and managing team members |
-| Owner | Everything an admin can, plus creating teams and upgrading the platform |
+| Member | View apps, deployments, build logs and the team (read-only); create apps (public repo, your own GitHub repos, Dockerfile, image); deploy, redeploy, restart, stop and roll back apps; for apps you created: runtime logs, environment variables, delete, and their settings (branch, build pack, commands, port, health check, `*.apps.avail.tools` address) |
+| Admin | Everything a member can, plus every app's settings and env vars, databases, services, projects and environments, shared variables, **Settings → Access protection** and **Guest access**, and managing team members |
+| Owner | Everything an admin can, plus the platform itself: servers and the web terminal, sources, destinations, registries, S3 storage, notifications, SSH keys and cloud tokens, the other **Settings** pages, creating teams and upgrading |
 
 Projects and environments are created by admins. Two-factor is handled by Clerk, not in the profile.
 
@@ -56,9 +56,11 @@ A public repository also works without the GitHub app: **+ New resource** → **
 
 ![Application page with its URL and the Deploy button](/images/developer-guide/app-general.jpg)
 
-**App URLs** are `https://<name>.apps.avail.tools` with a real certificate, e.g. `https://nexus-fast-bridge.apps.avail.tools`. New apps start with a random name. You can rename your app's address under **Domains** (then redeploy) to any free `https://<name>.apps.avail.tools`: one name of letters, digits and dashes, not used by another app. Other domains need an admin.
+**App URLs** are `https://<name>.apps.avail.tools` with a real certificate, e.g. `https://nexus-fast-bridge.apps.avail.tools`. New apps get `<repo>-<6 characters>-<environment>`, for example `https://nexus-fast-bridge-p5zgek-prod.apps.avail.tools` (`prod` for production, `stag` for staging). You can rename your app's address under **Domains** (then redeploy) to any free `https://<name>.apps.avail.tools`: one name of letters, digits and dashes, not used by another app. Other domains need an admin.
 
 **App owner:** the **App Owner** column in an environment's resource list and in the dashboard's deployment tables shows who created each app. Use **Filter → App Owners** to see only one person's apps. Databases, services and apps created before owners were recorded show `-`.
+
+**Handing an app over:** app → **General** → **App owner** → **Transfer to** another member, admin or the Owner (never a guest). The new app owner gets the app's settings, variables, runtime logs and delete; the previous one loses them. Admins and the Owner can transfer any app, an app owner their own. Every transfer is recorded under **Team → Audit log**.
 
 **Deployment log:** app → **Deployment Logs** lists every run; open one to see each build and start step.
 
@@ -173,7 +175,7 @@ Start with the deployment log for build problems and **Runtime Logs** for proble
 
 - **Deployment log:** app → **Deployment Logs** → pick the run.
 - **Runtime logs:** app → **Runtime Logs**. Live stdout/stderr of the running app. They can contain secrets, so members only see them for apps they created; admins see all. Guests see deployment logs only.
-- **Web terminal:** app → **Terminal** opens a shell inside the container (Admin role).
+- **Web terminal:** app → **Terminal** opens a shell inside the container (Owner only).
 
 | Symptom | Likely cause | Fix |
 | --- | --- | --- |

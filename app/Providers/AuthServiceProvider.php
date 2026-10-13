@@ -156,8 +156,9 @@ class AuthServiceProvider extends ServiceProvider
         Gate::define('createApplication', fn ($user) => $user->can('create', \App\Models\Application::class));
 
         // Register gate for terminal access
+        // Avail: server and container terminals are for the owner only (availAreaRoutes()).
         Gate::define('canAccessTerminal', function ($user) {
-            return $user->isAdmin() || $user->isOwner();
+            return availIsTeamOwner($user);
         });
     }
 }

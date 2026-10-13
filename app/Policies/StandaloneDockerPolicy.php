@@ -28,7 +28,8 @@ class StandaloneDockerPolicy
      */
     public function create(User $user): bool
     {
-        return $user->isAdmin();
+        // Avail: owner only (availAreaRoutes()); also reachable from Ctrl+K and onboarding modals.
+        return availIsTeamOwner($user);
     }
 
     /**

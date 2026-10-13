@@ -4,9 +4,11 @@
         <x-empty title="No validated S3 storage"
             description="Add and validate an S3 storage destination before enabling remote backups."
             icon-name="storages">
+            @if (availCanOpenRoute('storage.index'))
             <x-slot:contents>
                 <a class="button" {{ wireNavigate() }} href="{{ route('storage.index') }}">Open S3 storage</a>
             </x-slot:contents>
+            @endif
         </x-empty>
     </x-application.settings-section>
 @else
