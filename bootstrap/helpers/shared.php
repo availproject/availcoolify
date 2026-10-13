@@ -592,6 +592,10 @@ function find_resource_destination_for_current_team(?string $uuid): StandaloneDo
     if (! $destination?->server?->canHostResources()) {
         return null;
     }
+    // Avail: admins and members can't create resources on the Coolify host when an app server exists.
+    if (! availMayDeployToServer($destination->server)) {
+        return null;
+    }
 
     return $destination;
 }

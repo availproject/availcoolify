@@ -135,3 +135,49 @@ function availIsTeamOwner(?User $user = null): bool
 {
     return availMeetsArea($user ?? auth()->user(), 'owner');
 }
+
+/*
+ * Avail: where admins and members may put new resources. The Coolify host itself (server 0, "localhost":
+ * Coolify, its database and Traefik) is for the owner only, as long as the team has another server that
+ * can host resources. With a single server (e.g. a one-VM install) that server stays available to all.
+ */
+
+/** Servers offered when creating a resource: the Coolify host is left out for non-owners when another server exists. */
+function availDeployableServers(\Illuminate\Support\Collection $servers, ?User $user = null): \Illuminate\Support\Collection
+{
+    $user ??= auth()->user();
+    $host = $servers->first(fn ($server) => (int) $server->id === 0);
+    if (! $host || availMeetsArea($user, 'owner', (int) $host->team_id)) {
+        return $servers;
+    }
+    $others = $servers->reject(fn ($server) => (int) $server->id === 0)->values();
+
+    return $others->isNotEmpty() ? $others : $servers;
+}
+
+/** May the user create a resource on this server? Checked again when the resource is created (UI and API). */
+function availMayDeployToServer(?\App\Models\Server $server, ?User $user = null): bool
+{
+    if (! $server || (int) $server->id !== 0) {
+        return true;
+    }
+    if (availMeetsArea($user ?? auth()->user(), 'owner', (int) $server->team_id)) {
+        return true;
+    }
+
+    return ! availTeamHasAppServer((int) $server->team_id);
+}
+
+/** Does the team have a server other than the Coolify host that can take resources? */
+function availTeamHasAppServer(int $teamId): bool
+{
+    return \App\Models\Server::query()
+        ->where('team_id', $teamId)
+        ->where('id', '!=', 0)
+        ->whereRelation('settings', 'is_reachable', true)
+        ->whereRelation('settings', 'is_usable', true)
+        ->whereRelation('settings', 'force_disabled', false)
+        ->whereRelation('settings', 'is_swarm_worker', false)
+        ->get()
+        ->contains(fn (\App\Models\Server $server) => $server->canHostResources());
+}
