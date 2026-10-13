@@ -485,6 +485,13 @@ class ServicesController extends Controller
         if (! $server) {
             return response()->json(['message' => 'Server not found.'], 404);
         }
+        // Avail: admins and members can't create resources on the Coolify host when an app server exists.
+        if (! availMayDeployToServer($server)) {
+            return response()->json([
+                'message' => 'Validation failed.',
+                'errors' => ['server_uuid' => ['Use an app server. Only the owner can deploy to the Coolify host.']],
+            ], 422);
+        }
         if (! $server->canHostResources()) {
             return response()->json([
                 'message' => 'Validation failed.',
@@ -689,6 +696,13 @@ class ServicesController extends Controller
             $server = Server::whereTeamId($teamId)->whereUuid($serverUuid)->first();
             if (! $server) {
                 return response()->json(['message' => 'Server not found.'], 404);
+            }
+            // Avail: admins and members can't create resources on the Coolify host when an app server exists.
+            if (! availMayDeployToServer($server)) {
+                return response()->json([
+                    'message' => 'Validation failed.',
+                    'errors' => ['server_uuid' => ['Use an app server. Only the owner can deploy to the Coolify host.']],
+                ], 422);
             }
             if (! $server->canHostResources()) {
                 return response()->json([
