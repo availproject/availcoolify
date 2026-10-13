@@ -122,12 +122,14 @@
             ['label' => 'Shared Variables', 'href' => route('shared-variables.index')],
             ['label' => 'Team', 'href' => route('team.index')],
             ['label' => 'Notifications', 'href' => route('notifications.email')],
-            ['label' => 'Keys & Tokens', 'href' => route('security.private-key.index')],
+            ['label' => 'Keys & Tokens', 'href' => route(availCanOpenRoute('security.private-key.index') ? 'security.private-key.index' : 'security.api-tokens')],
             ['label' => 'Tags', 'href' => route('tags.show')],
             isInstanceAdmin()
-                ? ['label' => 'Settings', 'href' => route('settings.index')]
+                ? ['label' => 'Settings', 'href' => route(availCanOpenRoute('settings.index') ? 'settings.index' : 'settings.access-protection')]
                 : null,
         ])->filter()
+            // Avail: only pages this user may open (availAreaRoutes()).
+            ->filter(fn ($destination) => availCanOpenUrl($destination['href']))
         : collect();
 @endphp
 <div class="flex min-w-0 items-center gap-0.5 text-[13px]">

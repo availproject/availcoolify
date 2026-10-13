@@ -31,7 +31,10 @@
             'icon' => 'shield-alert',
             'sectionStart' => true,
         ] : null,
-    ])->filter();
+    ])->filter()
+        // Avail: members see the overview and member list only (availAreaRoutes()).
+        ->filter(fn ($item) => availCanOpenRoute($item['route']))
+        ->values();
 @endphp
 
 <section class="application-settings-workspace w-full max-w-none">
