@@ -197,7 +197,7 @@ class GithubPrivateRepositoryDeployKey extends Component
             $application->settings->is_static = $this->is_static;
             $application->settings->save();
 
-            $fqdn = generateUrl(server: $destination->server, random: $application->uuid);
+            $fqdn = availAppUrl($destination->server, $application);
             $application->fqdn = $fqdn;
             $application->name = generate_random_name($application->uuid);
             $application->save();

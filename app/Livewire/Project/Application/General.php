@@ -665,7 +665,7 @@ class General extends Component
 
             $server = data_get($this->application, 'destination.server');
             if ($server) {
-                $fqdn = generateUrl(server: $server, random: $this->application->uuid);
+                $fqdn = availAppUrl($server, $this->application);
                 $this->fqdn = $fqdn;
                 $this->syncData(toModel: true);
                 $this->application->save();

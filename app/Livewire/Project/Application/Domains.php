@@ -1709,7 +1709,7 @@ class Domains extends Component
                 return;
             }
 
-            $fqdn = generateUrl(server: $server, random: $this->application->uuid);
+            $fqdn = availAppUrl($server, $this->application);
             $merged = $this->currentDomainList()->push($fqdn)->unique()->values();
             if (! $this->saveDomainList($merged, null, checkConflicts: false)) {
                 return;
