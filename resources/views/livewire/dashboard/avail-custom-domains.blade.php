@@ -2,7 +2,7 @@
     @if ($requests !== [])
         <section class="mb-4! min-w-0" data-avail-removal-requests>
             <x-section-heading title="Custom domain removal requests"
-                subtitle="Members can&#39;t remove custom domains themselves. Approving removes the domain and the records AvailCoolify created for it." />
+                subtitle="Members can’t remove custom domains themselves. Approving removes the domain and the records AvailCoolify created for it." />
             <div class="overflow-x-auto rounded-md border border-neutral-200 dark:border-coolgray-300">
                 <table class="w-full min-w-[40rem] text-left text-sm">
                     <thead class="bg-neutral-50 text-[12px] uppercase tracking-wide text-neutral-500 dark:bg-coolgray-100 dark:text-fg-dim">
@@ -45,7 +45,7 @@
     @if ($rows !== [])
         <section class="mb-0! min-w-0" data-avail-custom-domains>
             <x-section-heading title="Custom domains"
-                subtitle="Records are created automatically in Cloudflare zones connected under Security → Integration tokens. Those marked &quot;Add in Cloudflare&quot; are yours to add: TTL Auto, proxy status as shown." />
+                subtitle="Records are created automatically in Cloudflare zones connected under Security → Integration tokens. Those marked “add in Cloudflare” are yours to add: TTL Auto, proxy status as shown." />
             <div class="overflow-x-auto rounded-md border border-neutral-200 dark:border-coolgray-300">
                 <table class="w-full min-w-[40rem] text-left text-sm">
                     <thead class="bg-neutral-50 text-[12px] uppercase tracking-wide text-neutral-500 dark:bg-coolgray-100 dark:text-fg-dim">
@@ -84,7 +84,7 @@
                                         <div style="width: 14rem; white-space: normal;" class="mt-1 text-[12px] text-neutral-500 dark:text-fg-dim">{{ $row['status']['message'] }}</div>
                                     @endif
                                 </td>
-                                <td class="px-3 py-2.5 font-mono text-[12px] whitespace-nowrap">
+                                <td class="px-3 py-2.5 font-mono text-[12px]" style="width: 20rem; white-space: normal; overflow-wrap: anywhere;">
                                     @if ($row['record'])
                                         <div>{{ $row['record']['type'] }} {{ $row['record']['name'] }} → {{ $row['record']['value'] }}</div>
                                         @if ($row['preview_record'])
