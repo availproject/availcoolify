@@ -41,6 +41,9 @@ class Show extends Component
 
     public ?string $wildcardDomain = null;
 
+    // Avail: the public IP Cloudflare records for custom domains point at, when `ip` is a private address.
+    public ?string $availDnsPublicIp = null;
+
     public bool $isReachable;
 
     public bool $isUsable;
@@ -150,6 +153,11 @@ class Show extends Component
             'connectionTimeout' => 'required|integer|min:1|max:300',
             'validationLogs' => 'nullable',
             'wildcardDomain' => 'nullable|url',
+            'availDnsPublicIp' => ['nullable', 'ip', function (string $attribute, mixed $value, \Closure $fail) {
+                if (filled($value) && ! \App\Support\DnsRecordHints::isPublicAddress((string) $value)) {
+                    $fail('Enter the public IP address that the internet reaches this server on, not a private one.');
+                }
+            }],
             'isReachable' => 'required',
             'isUsable' => 'required',
             'isSwarmManager' => 'required',
@@ -252,6 +260,7 @@ class Show extends Component
 
             $this->server->settings->connection_timeout = $this->connectionTimeout;
             $this->server->settings->wildcard_domain = $this->wildcardDomain;
+            $this->server->settings->avail_dns_public_ip = filled($this->availDnsPublicIp) ? trim($this->availDnsPublicIp) : null;
             // The role is only changed through requestServerRoleChange()/confirmServerRoleChange().
             $this->serverRole = $this->server->settings->effectiveServerRole()->value;
             $this->server->settings->is_metrics_enabled = $this->isMetricsEnabled;
@@ -281,6 +290,7 @@ class Show extends Component
             $this->connectionTimeout = $this->server->settings->connection_timeout;
 
             $this->wildcardDomain = $this->server->settings->wildcard_domain;
+            $this->availDnsPublicIp = $this->server->settings->avail_dns_public_ip;
             $this->isReachable = $this->server->settings->is_reachable;
             $this->isUsable = $this->server->settings->is_usable;
             $this->isSwarmManager = $this->server->settings->is_swarm_manager;

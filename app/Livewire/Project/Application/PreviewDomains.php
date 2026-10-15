@@ -492,6 +492,13 @@ class PreviewDomains extends Component
         foreach ($this->domainRows as $index => $row) {
             $this->domainRows[$index]['url'] = DomainPortOverrides::withoutPort($row['url']);
         }
+        // Avail: custom preview domains only where the app itself may have custom domains.
+        if ($customDomainError = availPreviewCustomDomainError($this->preview)) {
+            $this->refreshDomains();
+            $this->dispatch('error', $customDomainError);
+
+            return false;
+        }
         $changedFields = array_values(array_intersect(
             auditChangedFields($this->preview),
             ['fqdn', 'docker_compose_domains', 'domain_port_overrides'],

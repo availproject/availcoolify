@@ -2273,6 +2273,11 @@ function resolveServerIpAddress(?string $ipOrHost): array
  */
 function serverDnsTargetIp(Server $server): ?string
 {
+    // Avail: the Owner-set "Public IP for DNS" wins (servers reached over a private address).
+    if ($publicIp = availServerDnsPublicIp($server)) {
+        return $publicIp;
+    }
+
     $settings = instanceSettings();
 
     if ($server->id === 0) {
@@ -2376,7 +2381,7 @@ function validateDNSEntry(string $fqdn, Server $server)
             if ($results !== false) {
                 foreach ($results as $result) {
                     if ($result->getType() == $type) {
-                        if (isCloudflareIp($result->getData())) {
+                        if (isCloudflareIp($result->getData()) && availCloudflareProxyAllowed($host, $server)) {
                             $found_matching_ip = true;
                             break 2;
                         }

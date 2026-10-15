@@ -137,6 +137,11 @@
         {{-- Avail: deployments below projects; the Servers section is not shown on the dashboard. --}}
         <livewire:dashboard.active-deployments />
 
+        {{-- Avail: the Owner sees every custom domain and the Cloudflare record it needs. --}}
+        @if (availIsPlatformOwner())
+            <livewire:dashboard.avail-custom-domains />
+        @endif
+
         @if ($hasTrafficAnalytics)
             <livewire:dashboard.traffic-analytics />
         @endif

@@ -97,6 +97,10 @@ class ApplicationPreview extends BaseModel
                 $preview->fqdn = $normalized['fqdn'];
                 $preview->domain_port_overrides = $normalized['overrides'];
             }
+            // Avail: custom preview domains only where the app itself may have custom domains.
+            if ($preview->isDirty(['fqdn', 'docker_compose_domains'])) {
+                availThrowCustomDomainError(availPreviewCustomDomainError($preview));
+            }
         });
     }
 

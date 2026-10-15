@@ -14,6 +14,7 @@
   <coverage/>
   <php>
     <env name="APP_ENV" value="testing"/>
+    <env name="AVAIL_CUSTOM_DOMAIN_RULES" value="false" force="true"/>
     <env name="BCRYPT_ROUNDS" value="4"/>
     <env name="CACHE_DRIVER" value="array" force="true"/>
     <env name="DB_CONNECTION" value="testing" force="true"/>

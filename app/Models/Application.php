@@ -134,6 +134,13 @@ class Application extends BaseModel
     /** @use HasFactory<ApplicationFactory> */
     use Auditable, ClearsGlobalSearchCache, HasComposeVolumeWarnings, HasConfiguration, HasFactory, HasMetrics, HasNoindexDomains, HasSafeStringAttribute, HasSecretManager, ReleasesManagedDnsRecords, SoftDeletes;
 
+    /**
+     * Avail: custom domains added/removed by the save in progress, announced once it is saved.
+     *
+     * @var array{added: list<string>, removed: list<string>}|null
+     */
+    public ?array $availCustomDomainNotice = null;
+
     public const MAX_DOCKER_COMPOSE_SIZE_BYTES = 5 * 1024 * 1024;
 
     public const MAX_DOCKER_COMPOSE_COLLECTION_ALIASES = 256;
@@ -382,6 +389,24 @@ class Application extends BaseModel
                     $application->dockerfile_target_build = null;
                     $application->custom_healthcheck_found = false;
                 }
+            }
+
+            // Avail: custom domains only on Git-based apps in production; the Owner hears about changes.
+            availThrowCustomDomainError(availApplicationCustomDomainError($application));
+            $application->availCustomDomainNotice = $application->trashed() ? null : availCustomDomainChanges($application);
+        });
+        static::saved(function ($application) {
+            $notice = $application->availCustomDomainNotice;
+            $application->availCustomDomainNotice = null;
+            if ($notice !== null) {
+                availNotifyCustomDomainChange($application, $notice['added'], $notice['removed']);
+            }
+        });
+        static::deleted(function ($application) {
+            // A force delete of an app that is already in the trash was announced when it was trashed;
+            // a direct force delete clears fqdn first, which announces it.
+            if (! $application->isForceDeleting()) {
+                availNotifyCustomDomainChange($application, [], availApplicationCustomHosts($application));
             }
         });
         static::created(function ($application) {
