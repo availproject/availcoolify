@@ -23,22 +23,25 @@
                                     @endif
                                 </td>
                                 <td class="px-3 py-2.5">
-                                    @if ($row['url'])
-                                        <a class="underline-offset-2 hover:underline" href="{{ $row['url'] }}" wire:navigate>{{ $row['resource'] }}</a>
-                                    @else
-                                        {{ $row['resource'] }}
-                                    @endif
-                                    @if ($row['location'] !== '')
-                                        <div class="text-[12px] text-neutral-500 dark:text-fg-dim">{{ $row['location'] }}</div>
-                                    @endif
+                                    {{-- Cells here are nowrap and ignore max-width: the wrapper lets long app names wrap. --}}
+                                    <div style="width: 14rem; white-space: normal; overflow-wrap: anywhere;">
+                                        @if ($row['url'])
+                                            <a class="underline-offset-2 hover:underline" href="{{ $row['url'] }}" wire:navigate>{{ $row['resource'] }}</a>
+                                        @else
+                                            {{ $row['resource'] }}
+                                        @endif
+                                        @if ($row['location'] !== '')
+                                            <div class="text-[12px] text-neutral-500 dark:text-fg-dim">{{ $row['location'] }}</div>
+                                        @endif
+                                    </div>
                                 </td>
                                 <td class="px-3 py-2.5">
                                     <x-status-badge :label="$row['status']['label']" :type="$row['status']['type']" />
                                     @if ($row['status']['type'] === 'error' && $row['status']['message'] !== '')
-                                        <div class="mt-1 max-w-xs text-[12px] text-neutral-500 dark:text-fg-dim">{{ $row['status']['message'] }}</div>
+                                        <div style="width: 14rem; white-space: normal;" class="mt-1 text-[12px] text-neutral-500 dark:text-fg-dim">{{ $row['status']['message'] }}</div>
                                     @endif
                                 </td>
-                                <td class="px-3 py-2.5 font-mono text-[12px]">
+                                <td class="px-3 py-2.5 font-mono text-[12px] whitespace-nowrap">
                                     @if ($row['record'])
                                         <div>{{ $row['record']['type'] }} {{ $row['record']['name'] }} → {{ $row['record']['value'] }}</div>
                                         @if ($row['preview_record'])
