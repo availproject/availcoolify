@@ -172,6 +172,21 @@
                     @endif
                 @endunless
             @endcan
+            {{-- Avail: members ask the Owner to remove a custom domain. --}}
+            @cannot('update', $application)
+                @can('configure', $application)
+                    @if (! $isSuggested && ($availRemoval = $this->availRemovalState($row['url'])))
+                        @if ($availRemoval === 'pending')
+                            <x-status-badge status="Removal requested" type="warning" title="The Owner approves or rejects it." />
+                        @else
+                            <x-forms.button type="button" wire:click="availRequestRemoval({{ \Illuminate\Support\Js::from($row['url']) }})"
+                                wire:target="availRequestRemoval" class="h-7! shrink-0 px-2.5! text-[12px]!">
+                                Request removal
+                            </x-forms.button>
+                        @endif
+                    @endif
+                @endcan
+            @endcannot
         </div>
     </div>
 </div>

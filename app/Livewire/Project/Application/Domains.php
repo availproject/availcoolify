@@ -756,6 +756,39 @@ class Domains extends Component
             ->all();
     }
 
+    /** @var array<string, string>|null custom host => 'request' | 'pending', for the member's row actions */
+    private ?array $availRemovalStates = null;
+
+    /** Avail: what a member sees on a custom domain row: 'request' (button), 'pending' (badge) or null. */
+    public function availRemovalState(string $url): ?string
+    {
+        if ($this->availRemovalStates === null) {
+            $pending = \App\Models\AvailDomainRemovalRequest::where('application_id', $this->application->id)->where('status', 'pending')->pluck('host')->all();
+            $this->availRemovalStates = collect(availCustomDomainRulesEnabled() ? availApplicationCustomHosts($this->application) : [])
+                ->mapWithKeys(fn (string $host) => [$host => in_array($host, $pending, true) ? 'pending' : 'request'])
+                ->all();
+        }
+
+        return $this->availRemovalStates[availUrlHost($url) ?? ''] ?? null;
+    }
+
+    /** Avail: members ask the Owner to remove a custom domain instead of removing it. */
+    public function availRequestRemoval(string $url): void
+    {
+        try {
+            $this->authorize('configure', $this->application);
+            $host = availUrlHost($url);
+            if ($host === null) {
+                return;
+            }
+            availRequestDomainRemoval($this->application, $host, auth()->user());
+            $this->availRemovalStates = null;
+            $this->dispatch('success', "Removal of {$host} requested. The Owner approves or rejects it.");
+        } catch (\Throwable $e) {
+            handleError($e, $this);
+        }
+    }
+
     /** @param  array<int, string>  $urls */
     protected function availHasCustomDomain(array $urls): bool
     {
@@ -1100,11 +1133,12 @@ class Domains extends Component
             $this->dispatch('close-modal');
             $this->refreshDomains();
             $addedUrls = array_values(array_unique(array_merge($newUrls, $pairedUrls)));
-            // Avail: show the Cloudflare record to add right away for a new custom domain.
+            // Avail: custom domains get their DNS records from AvailCustomDomainDnsJob (every save path, members
+            // included), so upstream's own automatic DNS step is skipped; the records window opens right away.
             if ($this->availHasCustomDomain($addedUrls)) {
                 $this->dispatch('open-dns-records-modal');
             }
-            if ($this->configureDnsAfterDomainAdd($addedUrls)) {
+            if (! availCustomDomainRulesEnabled() && $this->configureDnsAfterDomainAdd($addedUrls)) {
                 $this->dispatch('success', 'Domain added.');
 
                 return;
@@ -2236,8 +2270,8 @@ class Domains extends Component
         // Avail: members may only use free <name>.<wildcard domain> addresses; no "use anyway".
         availGuardApplicationChanges($this->application);
 
-        // Avail: custom domains only on Git-based apps in production.
-        if ($customDomainError = availApplicationCustomDomainError($this->application)) {
+        // Avail: custom domains only on Git-based apps in production; members don't remove them.
+        if ($customDomainError = availApplicationCustomDomainError($this->application) ?? availCustomDomainRemovalError($this->application)) {
             $this->application->refresh();
             $this->dispatch('error', $customDomainError);
 

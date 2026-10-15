@@ -1,8 +1,51 @@
-<div @class(['mb-0! min-w-0' => $rows !== [], 'hidden' => $rows === []])>
+<div @class(['mb-0! min-w-0' => $rows !== [] || $requests !== [], 'hidden' => $rows === [] && $requests === []])>
+    @if ($requests !== [])
+        <section class="mb-4! min-w-0" data-avail-removal-requests>
+            <x-section-heading title="Custom domain removal requests"
+                subtitle="Members can&#39;t remove custom domains themselves. Approving removes the domain and the records AvailCoolify created for it." />
+            <div class="overflow-x-auto rounded-md border border-neutral-200 dark:border-coolgray-300">
+                <table class="w-full min-w-[40rem] text-left text-sm">
+                    <thead class="bg-neutral-50 text-[12px] uppercase tracking-wide text-neutral-500 dark:bg-coolgray-100 dark:text-fg-dim">
+                        <tr>
+                            <th class="px-3 py-2 font-medium">Domain</th>
+                            <th class="px-3 py-2 font-medium">App</th>
+                            <th class="px-3 py-2 font-medium">Asked by</th>
+                            <th class="px-3 py-2 font-medium"><span class="sr-only">Decision</span></th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-neutral-200 dark:divide-coolgray-300">
+                        @foreach ($requests as $request)
+                            <tr class="align-top text-[13px] text-black dark:text-fg" wire:key="avail-removal-request-{{ $request['id'] }}">
+                                <td class="px-3 py-2.5"><div style="width: 14rem; white-space: normal; overflow-wrap: anywhere;">{{ $request['host'] }}</div></td>
+                                <td class="px-3 py-2.5">
+                                    <div style="width: 14rem; white-space: normal; overflow-wrap: anywhere;">
+                                        {{ $request['resource'] }}
+                                        @if ($request['location'] !== '')
+                                            <div class="text-[12px] text-neutral-500 dark:text-fg-dim">{{ $request['location'] }}</div>
+                                        @endif
+                                    </div>
+                                </td>
+                                <td class="px-3 py-2.5">
+                                    {{ $request['requester'] }}
+                                    <div class="text-[12px] text-neutral-500 dark:text-fg-dim">{{ $request['requested'] }}</div>
+                                </td>
+                                <td class="px-3 py-2.5">
+                                    <div class="flex justify-end gap-2">
+                                        <x-forms.button type="button" wire:click="rejectRemoval({{ $request['id'] }})" wire:target="rejectRemoval,approveRemoval">Reject</x-forms.button>
+                                        <x-forms.button type="button" isError wire:click="approveRemoval({{ $request['id'] }})" wire:target="rejectRemoval,approveRemoval">Approve removal</x-forms.button>
+                                    </div>
+                                </td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    @endif
     @if ($rows !== [])
         <section class="mb-0! min-w-0" data-avail-custom-domains>
             <x-section-heading title="Custom domains"
-                subtitle="Only you can add these records in Cloudflare: A record, DNS only (grey cloud), TTL Auto. AvailCoolify has no Cloudflare access." />
+                subtitle="Records are created automatically in Cloudflare zones connected under Security → Integration tokens. Those marked &quot;Add in Cloudflare&quot; are yours to add: TTL Auto, proxy status as shown." />
             <div class="overflow-x-auto rounded-md border border-neutral-200 dark:border-coolgray-300">
                 <table class="w-full min-w-[40rem] text-left text-sm">
                     <thead class="bg-neutral-50 text-[12px] uppercase tracking-wide text-neutral-500 dark:bg-coolgray-100 dark:text-fg-dim">
@@ -47,7 +90,16 @@
                                         @if ($row['preview_record'])
                                             <div>{{ $row['preview_record']['type'] }} {{ $row['preview_record']['name'] }} → {{ $row['preview_record']['value'] }} <span class="font-sans text-neutral-500 dark:text-fg-dim">(PR previews)</span></div>
                                         @endif
-                                        <div class="font-sans text-neutral-500 dark:text-fg-dim">zone {{ $row['record']['zone'] }}</div>
+                                        <div class="font-sans text-neutral-500 dark:text-fg-dim">
+                                            zone {{ $row['record']['zone'] }} · {{ ($row['record']['proxied'] ?? false) ? 'proxied' : 'DNS only' }} ·
+                                            @if ($row['record']['created'] ?? false)
+                                                created automatically
+                                            @elseif ($row['record']['automatic'] ?? false)
+                                                being created
+                                            @else
+                                                add in Cloudflare
+                                            @endif
+                                        </div>
                                     @else
                                         <span class="font-sans text-neutral-500 dark:text-fg-dim">Set the server&#39;s Public IP for DNS first (Servers → General).</span>
                                     @endif

@@ -8,9 +8,10 @@ use Livewire\Attributes\Lazy;
 use Livewire\Component;
 
 /**
- * Avail: the Owner's list of custom domains. AvailCoolify can't edit Cloudflare, so this shows every
- * custom domain, whether its DNS works yet, and the record to add. Domains kept where the rules no
- * longer allow them (outside production, not deployed from Git, services) are flagged.
+ * Avail: the Owner's list of custom domains: every custom domain, whether its DNS works, its record
+ * (created automatically or still to add by hand), and the members' removal requests to approve or
+ * reject. Domains kept where the rules no longer allow them (outside production, not deployed from Git,
+ * services) are flagged.
  */
 #[Lazy]
 class AvailCustomDomains extends Component
@@ -18,9 +19,62 @@ class AvailCustomDomains extends Component
     /** @var list<array<string, mixed>> */
     public array $rows = [];
 
+    /** @var list<array<string, mixed>> */
+    public array $requests = [];
+
     public function mount(): void
     {
-        $this->rows = availIsPlatformOwner() ? $this->buildRows() : [];
+        $this->load();
+    }
+
+    private function load(): void
+    {
+        $owner = availIsPlatformOwner();
+        $this->rows = $owner ? $this->buildRows() : [];
+        $this->requests = $owner ? $this->buildRequests() : [];
+    }
+
+    public function approveRemoval(int $id): void
+    {
+        $this->decide($id, approve: true);
+    }
+
+    public function rejectRemoval(int $id): void
+    {
+        $this->decide($id, approve: false);
+    }
+
+    private function decide(int $id, bool $approve): void
+    {
+        try {
+            abort_unless(availIsPlatformOwner(), 403);
+            $request = \App\Models\AvailDomainRemovalRequest::where('team_id', currentTeam()?->id)->findOrFail($id);
+            $approve ? availApproveDomainRemoval($request, auth()->user()) : availRejectDomainRemoval($request, auth()->user());
+            $this->dispatch('success', $approve ? "{$request->host} removed. Redeploy the app to stop serving it." : "Kept {$request->host}.");
+        } catch (\Throwable $e) {
+            handleError($e, $this);
+        }
+        $this->load();
+    }
+
+    /** @return list<array<string, mixed>> */
+    private function buildRequests(): array
+    {
+        $team = currentTeam();
+        if (! $team || ! availCustomDomainRulesEnabled()) {
+            return [];
+        }
+
+        return \App\Models\AvailDomainRemovalRequest::with(['application.environment.project', 'requester'])
+            ->where('team_id', $team->id)->where('status', 'pending')->orderBy('created_at')->get()
+            ->map(fn ($request) => [
+                'id' => $request->id,
+                'host' => $request->host,
+                'resource' => $request->application?->name ?? 'Deleted app',
+                'location' => trim(($request->application?->environment?->project?->name ?? '').' / '.($request->application?->environment?->name ?? ''), ' /'),
+                'requester' => $request->requester?->name ?: ($request->requester?->email ?? 'Unknown'),
+                'requested' => $request->created_at?->diffForHumans() ?? '',
+            ])->values()->all();
     }
 
     public function placeholder(): string
@@ -47,7 +101,9 @@ class AvailCustomDomains extends Component
             if ($hosts === []) {
                 continue;
             }
-            $records = collect(availApplicationCloudflareRecords($application))->keyBy('fqdn');
+            $records = collect(availApplicationCloudflareRecords($application))
+                ->map(fn (array $record) => [...$record, 'created' => availHasManagedRecord($application, $record['fqdn'])])
+                ->keyBy('fqdn');
             $kept = availApplicationCustomDomainRuleError($application) !== null;
             $environment = $application->environment;
             $project = $environment?->project;

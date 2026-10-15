@@ -393,6 +393,7 @@ class Application extends BaseModel
 
             // Avail: custom domains only on Git-based apps in production; the Owner hears about changes.
             availThrowCustomDomainError(availApplicationCustomDomainError($application));
+            availThrowCustomDomainError(availCustomDomainRemovalError($application));
             $application->availCustomDomainNotice = $application->trashed() ? null : availCustomDomainChanges($application);
         });
         static::saved(function ($application) {
