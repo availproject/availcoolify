@@ -82,7 +82,7 @@ Previews are switched on for every new app. A push to any branch other than the 
 
 ## Custom domains
 
-A custom domain is any address outside `apps.avail.so`, such as `test.example.com`. Admins and the Owner add them under the app's **Domains**, with these rules:
+A custom domain is any address outside `apps.avail.so`, such as `test.example.com`. Add one under the app's **Domains**. Members can add them to the apps they created; admins and the Owner to any app. The rules:
 
 | App | Custom domain |
 | --- | --- |
@@ -90,15 +90,25 @@ A custom domain is any address outside `apps.avail.so`, such as `test.example.co
 | The same app in **staging** or any other environment | No, use an `apps.avail.so` address |
 | Pasted Dockerfile, Docker image, one-click service | Never |
 
-AvailCoolify has no access to Cloudflare, so the Owner adds the DNS record by hand:
+**DNS records, as on Vercel:**
 
-1. Add the domain. The **DNS entries** window opens with the record to add: type **A**, the name inside its zone (`test` in zone `example.com`), the server's public IP, proxy status **DNS only** (grey cloud), TTL Auto. With PR previews on, a second record `*.test` covers the previews (`7.test.example.com`). It's under **DNS entries → Manual records** later too.
-2. The Owner gets the same record in the team's notification channels (Slack and others) and by email once transactional email is set up, and finds every custom domain and its DNS status on the dashboard.
-3. Once the record is in Cloudflare, press **Recheck** until it turns green, then **Redeploy** the app so it answers on the new domain. The HTTPS certificate is issued automatically; if the browser still warns a few minutes later, redeploy once more.
+| Domain | Record |
+| --- | --- |
+| Subdomain, e.g. `test.example.com` | **CNAME** `test` → the app's own address, e.g. `myrepo-abc123-prod.apps.avail.so` |
+| Root domain, e.g. `example.com` | **A** `@` → the server's public IP, DNS only |
+| PR previews of a domain (`7.test.example.com`) | the same record for `*.test`, when previews are on and it's the app's first domain |
 
-Keep the record **DNS only**: a proxied (orange cloud) record fails the check, because HTTPS and the certificate check have to reach the server directly. When a custom domain is removed, the Owner is told to delete its records. A production environment can't be renamed, and an app can't be moved out of production, while it has custom domains. Cloning an app with custom domains into staging gives the clone an `apps.avail.so` address instead.
+A CNAME is proxied (orange cloud) exactly when the app's own address is. TTL is always Auto.
 
-The IP comes from the server's **Public IP for DNS** (Servers → General), which the Owner sets once for servers that AvailCoolify reaches over a private address.
+**Created automatically:** when the domain's zone is in the Cloudflare account the Owner connected (Security → Integration tokens), AvailCoolify creates the records itself as soon as the domain is added, with no approval. Otherwise the **DNS entries** window and the Owner's notice list the records marked **Add in Cloudflare**, and the Owner adds them by hand. A record that already exists with a different value is never overwritten; the notice says so.
+
+1. Add the domain. The **DNS entries** window opens and shows each record as **Created**, **Being created** or **Add in Cloudflare**. It's under **DNS entries → Manual records** later too.
+2. The Owner is told in the team's notification channels (Slack and others) and by email once transactional email is set up, and sees every custom domain and its DNS status on the dashboard.
+3. Press **Recheck** until the domain turns green, then **Redeploy** the app so it answers on the new domain. The HTTPS certificate is issued automatically; if the browser still warns a few minutes later, redeploy once more.
+
+**Removing a custom domain:** admins and the Owner remove it directly. Members can't: they press **Request removal** on the domain, and the Owner approves or rejects it on the dashboard under **Custom domain removal requests**. Approving removes the domain and the records AvailCoolify created for it; the member gets an email with the decision once transactional email is set up. A member can't delete an app that still has custom domains until the Owner removed them.
+
+A root domain's A record must stay **DNS only**: proxied, it fails the check. A production environment can't be renamed, and an app can't be moved out of production, while it has custom domains. Cloning an app with custom domains into staging gives the clone an `apps.avail.so` address instead. The A records use the server's **Public IP for DNS** (Servers → General), which the Owner sets once for servers that AvailCoolify reaches over a private address.
 
 ## Access protection per environment
 

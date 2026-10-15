@@ -114,6 +114,14 @@ class Danger extends Component
 
         try {
             $this->authorize('delete', $this->resource);
+            // Avail: a member's app with custom domains goes only after the Owner removed them.
+            if ($this->resource instanceof \App\Models\Application && availCustomDomainRulesEnabled()
+                && ! availIsAdminOfResource(auth()->user(), $this->resource)
+                && ($hosts = availApplicationCustomHosts($this->resource)) !== []) {
+                $this->dispatch('error', 'This app has custom domains ('.implode(', ', $hosts).'). Ask the Owner to remove them first: Request removal on the Domains page.');
+
+                return;
+            }
             DeleteResourceJob::dispatch(
                 $this->resource,
                 $this->delete_volumes,
