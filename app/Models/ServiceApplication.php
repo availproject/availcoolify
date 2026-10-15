@@ -17,6 +17,13 @@ class ServiceApplication extends BaseModel
 
     protected $appends = ['url'];
 
+    /**
+     * Avail: custom domains added/removed by the save in progress, announced once it is saved.
+     *
+     * @var array{added: list<string>, removed: list<string>}|null
+     */
+    public ?array $availCustomDomainNotice = null;
+
     protected $fillable = [
         'service_id',
         'name',
@@ -82,6 +89,16 @@ class ServiceApplication extends BaseModel
             if ($service->isDirty('fqdn')) {
                 $service->normalizeDomainPortOverrides();
                 $service->syncNoindexDomains();
+                // Avail: services never get new custom domains; the Owner hears about removed ones.
+                availThrowCustomDomainError(availServiceApplicationCustomDomainError($service));
+                $service->availCustomDomainNotice = availCustomDomainChanges($service);
+            }
+        });
+        static::saved(function ($service) {
+            $notice = $service->availCustomDomainNotice;
+            $service->availCustomDomainNotice = null;
+            if ($notice !== null) {
+                availNotifyCustomDomainChange($service, $notice['added'], $notice['removed']);
             }
         });
     }

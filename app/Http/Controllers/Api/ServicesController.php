@@ -171,6 +171,16 @@ class ServicesController extends Controller
             return ['errors' => $errors];
         }
 
+        // Avail: services never get custom domains (only Git-based apps in production do). Checked for
+        // every container first, so a refused URL changes nothing.
+        foreach ($urlsArray as $item) {
+            $application = $service->applications()->where('name', data_get($item, 'name'))->first();
+            $containerUrls = filled(data_get($item, 'url')) ? ValidationPatterns::normalizeApplicationDomains(data_get($item, 'url')) : null;
+            if ($application && ($customDomainError = availServiceApplicationCustomDomainError($application, $containerUrls))) {
+                return ['errors' => [$customDomainError]];
+            }
+        }
+
         collect($urlsArray)->each(function ($item) use ($service, $teamId, $forceDomainOverride, &$errors, &$conflicts) {
             $name = data_get($item, 'name');
             $containerUrls = data_get($item, 'url');

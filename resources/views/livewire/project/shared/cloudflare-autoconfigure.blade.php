@@ -107,6 +107,16 @@
 @php
     $dnsHints = $this->dnsRecordHints();
     $dnsCopyText = $this->dnsRecordsCopyText();
+    // Avail: custom domains get a ready-to-paste Cloudflare record (A, DNS only) instead of the generic list.
+    $availCustomMode = availCustomDomainRulesEnabled() && method_exists($this, 'availCloudflareRecords');
+    $availRecords = $availCustomMode ? $this->availCloudflareRecords() : [];
+    $availPendingCustomHosts = [];
+    if ($availCustomMode) {
+        $availPendingCustomHosts = $this->availPendingCustomHosts();
+        $dnsHints = collect($dnsHints)->reject(fn (array $record) => in_array($record['name'], $availPendingCustomHosts, true))->values()->all();
+        $dnsCopyText = \App\Support\DnsRecordHints::toCopyText($dnsHints);
+    }
+    $availCopyText = collect($availRecords)->map(fn (array $r) => "{$r['type']}  {$r['name']}  {$r['value']}  (zone {$r['zone']}, DNS only)")->implode("\n");
 @endphp
 <div
     x-data="{
@@ -161,7 +171,78 @@
                             Type / Name / Value records so traffic reaches this server.
                         </p>
 
-                        @if (blank($serverIp) && count($dnsHints) === 0)
+                        @if ($availCustomMode && ($availRecords !== [] || $availPendingCustomHosts !== []))
+                            <div class="flex flex-col gap-3" data-avail-cloudflare-records>
+                                <x-callout type="warning" title="Owner action needed">
+                                    Add {{ count($availRecords) === 1 ? 'this record' : 'these records' }} in Cloudflare.
+                                    AvailCoolify has no Cloudflare access, so it can&#39;t add them itself. The Owner also gets
+                                    a notice whenever a custom domain is added.
+                                </x-callout>
+                                @if ($availRecords === [])
+                                    <x-callout type="danger" title="No public IP for DNS">
+                                        This server is reached over a private address, so the IP for the record isn&#39;t known yet.
+                                        The Owner sets it in Servers → {{ $this->application->destination?->server?->name ?? 'the server' }} → Public IP for DNS.
+                                    </x-callout>
+                                @else
+                                    <div class="overflow-x-auto rounded-md border border-neutral-200 dark:border-coolgray-300">
+                                        <table class="w-full min-w-[34rem] text-left text-sm">
+                                            <thead
+                                                class="bg-neutral-50 text-[12px] uppercase tracking-wide text-neutral-500 dark:bg-coolgray-100 dark:text-fg-dim">
+                                                <tr>
+                                                    <th class="px-3 py-2 font-medium">Type</th>
+                                                    <th class="px-3 py-2 font-medium">Name</th>
+                                                    <th class="px-3 py-2 font-medium">{{ $availRecords[0]['type'] === 'AAAA' ? 'IPv6 address' : 'IPv4 address' }}</th>
+                                                    <th class="px-3 py-2 font-medium">Proxy status</th>
+                                                    <th class="px-3 py-2 font-medium">TTL</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody class="divide-y divide-neutral-200 dark:divide-coolgray-300">
+                                                @foreach ($availRecords as $record)
+                                                    <tr class="text-[13px] text-black dark:text-fg" wire:key="avail-cf-{{ $record['fqdn'] }}">
+                                                        <td class="px-3 py-2.5">{{ $record['type'] }}</td>
+                                                        <td class="px-3 py-2.5">
+                                                            @include('livewire.project.shared.partials.dns-copy-cell', [
+                                                                'text' => $record['name'],
+                                                                'label' => 'Copy name',
+                                                                'break' => true,
+                                                            ])
+                                                            <div class="text-[12px] text-neutral-500 dark:text-fg-dim">
+                                                                zone {{ $record['zone'] }}@if ($record['zone_guessed']) (check the zone name)@endif
+                                                                @if ($record['purpose'] === 'PR previews') · for PR previews @endif
+                                                            </div>
+                                                        </td>
+                                                        <td class="px-3 py-2.5">
+                                                            @include('livewire.project.shared.partials.dns-copy-cell', [
+                                                                'text' => $record['value'],
+                                                                'label' => 'Copy IP address',
+                                                                'break' => true,
+                                                            ])
+                                                        </td>
+                                                        <td class="px-3 py-2.5 whitespace-nowrap">DNS only (grey cloud)</td>
+                                                        <td class="px-3 py-2.5">{{ $record['ttl'] }}</td>
+                                                    </tr>
+                                                @endforeach
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    <ol class="list-decimal space-y-1 pl-5 text-[13px] leading-6 text-neutral-600 dark:text-fg-dim">
+                                        <li>Cloudflare → the zone above → DNS → Records → Add record.</li>
+                                        <li>Paste the values and click the cloud until it is grey (DNS only).</li>
+                                        <li>Save, then press Recheck here. The HTTPS certificate follows automatically.</li>
+                                    </ol>
+                                    <div class="flex justify-end">
+                                        <button type="button" class="button shrink-0" title="Copy all records" x-data="copyButton"
+                                            @click.prevent="copy(@js($availCopyText))">
+                                            <span x-text="copied ? 'Copied' : 'Copy all'"></span>
+                                        </button>
+                                    </div>
+                                @endif
+                            </div>
+                        @endif
+
+                        @if ($availCustomMode && ($availRecords !== [] || $availPendingCustomHosts !== []) && count($dnsHints) === 0)
+                            {{-- Only custom domains are pending: the card above covers them. --}}
+                        @elseif (blank($serverIp) && count($dnsHints) === 0)
                             <x-callout type="warning" title="No server IP">
                                 Could not determine a public IP for this destination. Set the server IP (or instance public IPv4 for localhost) first.
                             </x-callout>

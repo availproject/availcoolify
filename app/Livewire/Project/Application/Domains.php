@@ -276,7 +276,11 @@ class Domains extends Component
         $this->dnsValidationEnabled = (bool) data_get($settings, 'is_dns_validation_enabled', true);
 
         $server = $this->application->destination?->server;
-        if ($server) {
+        if ($server && ($publicIp = availServerDnsPublicIp($server))) {
+            // Avail: the Owner-set "Public IP for DNS" (servers reached over a private address).
+            $this->serverIpConfigured = $publicIp;
+            $this->serverIp = $publicIp;
+        } elseif ($server) {
             if ($server->id === 0) {
                 $configured = data_get($settings, 'public_ipv4')
                     ?: data_get($settings, 'public_ipv6')
@@ -724,6 +728,43 @@ class Domains extends Component
         return $this->application->destination?->server?->id === 0;
     }
 
+    /**
+     * Avail: the Cloudflare records (DNS only) for this app's custom domains that don't resolve yet.
+     *
+     * @return list<array{type: string, name: string, zone: string, fqdn: string, value: string, proxy: string, ttl: string, purpose: string, zone_guessed: bool}>
+     */
+    public function availCloudflareRecords(): array
+    {
+        return availApplicationCloudflareRecords($this->application, $this->availPendingCustomHosts());
+    }
+
+    /**
+     * Avail: this app's custom domains whose DNS doesn't work yet.
+     *
+     * @return list<string>
+     */
+    public function availPendingCustomHosts(): array
+    {
+        $wildcardHost = availWildcardHost($this->application->destination?->server);
+
+        return collect($this->domainRows)
+            ->filter(fn (array $row) => ! ($row['is_suggested'] ?? false) && ($row['dns_status'] ?? null) !== 'ok')
+            ->map(fn (array $row) => availUrlHost($row['url'] ?? null))
+            ->filter(fn ($host) => $host !== null && availIsCustomDomainHost($host, $wildcardHost))
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /** @param  array<int, string>  $urls */
+    protected function availHasCustomDomain(array $urls): bool
+    {
+        $wildcardHost = availWildcardHost($this->application->destination?->server);
+
+        return availCustomDomainRulesEnabled() && collect($urls)
+            ->contains(fn (string $url) => ($host = availUrlHost($url)) !== null && availIsCustomDomainHost($host, $wildcardHost));
+    }
+
     public function checkAllDns(): void
     {
         $this->authorize('configure', $this->application);
@@ -1059,6 +1100,10 @@ class Domains extends Component
             $this->dispatch('close-modal');
             $this->refreshDomains();
             $addedUrls = array_values(array_unique(array_merge($newUrls, $pairedUrls)));
+            // Avail: show the Cloudflare record to add right away for a new custom domain.
+            if ($this->availHasCustomDomain($addedUrls)) {
+                $this->dispatch('open-dns-records-modal');
+            }
             if ($this->configureDnsAfterDomainAdd($addedUrls)) {
                 $this->dispatch('success', 'Domain added.');
 
@@ -2190,6 +2235,14 @@ class Domains extends Component
 
         // Avail: members may only use free <name>.<wildcard domain> addresses; no "use anyway".
         availGuardApplicationChanges($this->application);
+
+        // Avail: custom domains only on Git-based apps in production.
+        if ($customDomainError = availApplicationCustomDomainError($this->application)) {
+            $this->application->refresh();
+            $this->dispatch('error', $customDomainError);
+
+            return false;
+        }
 
         if ($checkConflicts && ! $this->forceSaveDomains) {
             $result = checkDomainUsage(resource: $this->application);

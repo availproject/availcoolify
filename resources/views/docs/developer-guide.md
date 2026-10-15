@@ -57,7 +57,7 @@ A public repository also works without the GitHub app: **+ New resource** → **
 
 ![Application page with its URL and the Deploy button](/images/developer-guide/app-general.jpg)
 
-**App URLs** are `https://<name>.apps.avail.so` with a real certificate. New apps get `<repo>-<6 characters>-<environment>`, for example `https://nexus-fast-bridge-p5zgek-prod.apps.avail.so` (`prod` for production, `stag` for staging). You can rename your app's address under **Domains** (then redeploy) to any free `https://<name>.apps.avail.so`: one name of letters, digits and dashes, not used by another app. Other domains need an admin.
+**App URLs** are `https://<name>.apps.avail.so` with a real certificate. New apps get `<repo>-<6 characters>-<environment>`, for example `https://nexus-fast-bridge-p5zgek-prod.apps.avail.so` (`prod` for production, `stag` for staging). You can rename your app's address under **Domains** (then redeploy) to any free `https://<name>.apps.avail.so`: one name of letters, digits and dashes, not used by another app. Other domains need an admin; see **Custom domains** below.
 
 **App owner:** the **App Owner** column in an environment's resource list and in the dashboard's deployment tables shows who created each app. Use **Filter → App Owners** to see only one person's apps. Databases, services and apps created before owners were recorded show `-`.
 
@@ -79,6 +79,26 @@ Every pull request gets its own private preview URL, behind a Clerk login that o
 After one sign-in, a preview stays unlocked in that browser for 12 hours. Only PRs from repo owners, org members and collaborators build; PRs from forks never do. Put `[skip ci]` or `[skip cd]` in the PR title or commit message to skip a build.
 
 Previews are switched on for every new app. A push to any branch other than the app's production branch does nothing; a preview exists only for a pull request. For an app created before this, an admin turns previews on in the app's **Previews** tab.
+
+## Custom domains
+
+A custom domain is any address outside `apps.avail.so`, such as `test.example.com`. Admins and the Owner add them under the app's **Domains**, with these rules:
+
+| App | Custom domain |
+| --- | --- |
+| From a GitHub App repo or a public Git repository (Railpack, Nixpacks, Static, the repo's own Dockerfile, Docker Compose) in an environment named **production** | Yes |
+| The same app in **staging** or any other environment | No, use an `apps.avail.so` address |
+| Pasted Dockerfile, Docker image, one-click service | Never |
+
+AvailCoolify has no access to Cloudflare, so the Owner adds the DNS record by hand:
+
+1. Add the domain. The **DNS entries** window opens with the record to add: type **A**, the name inside its zone (`test` in zone `example.com`), the server's public IP, proxy status **DNS only** (grey cloud), TTL Auto. With PR previews on, a second record `*.test` covers the previews (`7.test.example.com`). It's under **DNS entries → Manual records** later too.
+2. The Owner gets the same record in the team's notification channels (Slack and others) and by email once transactional email is set up, and finds every custom domain and its DNS status on the dashboard.
+3. Once the record is in Cloudflare, press **Recheck** until it turns green, then **Redeploy** the app so it answers on the new domain. The HTTPS certificate is issued automatically; if the browser still warns a few minutes later, redeploy once more.
+
+Keep the record **DNS only**: a proxied (orange cloud) record fails the check, because HTTPS and the certificate check have to reach the server directly. When a custom domain is removed, the Owner is told to delete its records. A production environment can't be renamed, and an app can't be moved out of production, while it has custom domains. Cloning an app with custom domains into staging gives the clone an `apps.avail.so` address instead.
+
+The IP comes from the server's **Public IP for DNS** (Servers → General), which the Owner sets once for servers that AvailCoolify reaches over a private address.
 
 ## Access protection per environment
 
@@ -132,7 +152,7 @@ Test in staging first, then copy the app to production.
 ![Promoting an app from staging to production](/images/developer-guide/promote-flow.svg)
 
 1. App → **Resource operations** → **Clone to another environment** → pick the project and **production**.
-2. Open the new app in production and change its **domain** (the clone keeps staging's URL) and any **environment variables** that differ (database URLs, API keys).
+2. Open the new app in production and change its **domain** (the clone keeps staging's URL; a custom domain can be added now, see **Custom domains**) and any **environment variables** that differ (database URLs, API keys).
 3. **Deploy** it and check the production URL.
 4. Once production works, delete the staging copy (app → **Danger zone → Delete**).
 

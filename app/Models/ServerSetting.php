@@ -150,6 +150,7 @@ class ServerSetting extends Model
         'docker_version_checked_at',
         'compose_version',
         'compose_version_checked_at',
+        'avail_dns_public_ip',
     ];
 
     /**

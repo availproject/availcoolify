@@ -61,7 +61,7 @@
                 <form wire:submit.prevent="submit" class="application-settings-form flex flex-col gap-6">
                     {{-- Server role saves separately; keep dirty tracking on explicit-save fields. --}}
                     <x-unsaved-bar action="submit"
-                        targets="name,description,ip,user,port,connectionTimeout,serverTimezone,wildcardDomain" />
+                        targets="name,description,ip,user,port,connectionTimeout,serverTimezone,wildcardDomain,availDnsPublicIp" />
 
                     <x-application.settings-section id="server-connection-section" title="Connection"
                         helper="Configure how Coolify identifies, reaches, and validates this server.">
@@ -233,6 +233,15 @@
                                     :disabled="$isValidating" />
                             @endif
                         </div>
+
+                        @if (!$isSwarmWorker && $serverRole !== 'build')
+                            <div class="mt-4 grid gap-4 lg:grid-cols-3">
+                                <x-forms.input canGate="update" :canResource="$server" id="availDnsPublicIp"
+                                    label="Public IP for DNS" placeholder="203.0.113.10"
+                                    helper="The IP the internet reaches this server on. Custom domains get an A record pointing here (shown on the app's Domains page and in the custom domain notices). Needed when the address above is private, such as 10.x. Leave empty to use the address above."
+                                    :disabled="$isValidating" />
+                            </div>
+                        @endif
 
                         @if (!$server->isLocalhost())
                             <div class="mt-4 border-t border-neutral-200 pt-4 dark:border-white/[0.08]">
