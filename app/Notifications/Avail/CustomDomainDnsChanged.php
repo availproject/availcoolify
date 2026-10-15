@@ -56,12 +56,9 @@ class CustomDomainDnsChanged extends Notification implements ShouldQueue
             $environment = $resource->environment;
             $project = $environment?->project;
             $server = availApplicationServer($resource);
+            // base_url(), not route(): queued notices run without a request, where route() gives APP_URL.
             $domainsUrl = ($project && $environment && ! $resource->trashed())
-                ? route('project.application.domains', [
-                    'project_uuid' => $project->uuid,
-                    'environment_uuid' => $environment->uuid,
-                    'application_uuid' => $resource->uuid,
-                ])
+                ? base_url()."/project/{$project->uuid}/environment/{$environment->uuid}/application/{$resource->uuid}/domains"
                 : null;
             $previewParents = array_values(array_intersect(availPreviewParentHosts($resource), $added));
         } else {

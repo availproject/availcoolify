@@ -494,6 +494,7 @@ test('adding, removing and deleting custom domains tell the team channels with t
             && str_contains($text, 'A  test  ->  203.0.113.10  in zone abc.xyz')
             && str_contains($text, 'A  *.test  ->  203.0.113.10  in zone abc.xyz (PR previews)')
             && str_contains($text, 'DNS only (grey cloud)')
+            && str_contains($text, 'Domains page: https://deploy.avail.test/project/')
             && $notice->via(Team::find(0)) === Team::find(0)->getEnabledChannels('general');
     });
 
