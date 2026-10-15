@@ -112,6 +112,10 @@ class CheckDomainDns
         if ($proxied && ! $proxyAllowed) {
             return $this->result('failed', availProxiedCustomDomainMessage(), $expectedIp);
         }
+        // Avail: a custom subdomain needs a CNAME to the app's address, not an A record.
+        if (availCustomDomainRulesEnabled() && availIsCustomDomainHost($host, availWildcardHost($server)) && ! availIsRootDomain($host)) {
+            return $this->result('failed', 'Not pointing here yet. Add the CNAME record shown under DNS entries.', $expectedIp);
+        }
 
         return $this->result('failed', dnsMismatchGuidanceMessage($expectedIp, $expectedIp), $expectedIp);
     }
