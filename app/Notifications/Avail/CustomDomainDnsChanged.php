@@ -17,7 +17,7 @@ use Illuminate\Support\Facades\Log;
 
 /**
  * Avail: custom domains were added to or removed from an app. For new domains it lists the DNS records
- * AvailCoolify created in Cloudflare and the ones the Owner still has to add by hand. Goes to the team's
+ * the Owner adds by hand in Cloudflare; for removed ones the records to delete. Goes to the team's
  * notification channels (Slack, Discord, Telegram, Pushover, webhook; "general" events never email the
  * whole team) and, when transactional email is set up, to the Owner by email.
  *
@@ -33,7 +33,7 @@ class CustomDomainDnsChanged extends Notification implements ShouldQueue
      * @param  list<string>  $added
      * @param  list<string>  $removed
      * @param  list<string>  $previewParents
-     * @param  list<array<string, mixed>>|null  $records  provisioned records with their status (new app domains)
+     * @param  list<array<string, mixed>>|null  $records  the records to add (new app domains), from availDesiredRecord()
      */
     public function __construct(
         public string $resourceName,
@@ -92,14 +92,7 @@ class CustomDomainDnsChanged extends Notification implements ShouldQueue
 
     public function title(): string
     {
-        if ($this->added === []) {
-            return 'Custom domain removed';
-        }
-        if ($this->records !== null && collect($this->records)->every(fn ($record) => $record['status'] === 'created')) {
-            return 'Custom domain added: DNS record created';
-        }
-
-        return 'Custom domain added: add the Cloudflare record';
+        return $this->added === [] ? 'Custom domain removed: delete the Cloudflare records' : 'Custom domain added: add the Cloudflare record';
     }
 
     /**
@@ -116,20 +109,22 @@ class CustomDomainDnsChanged extends Notification implements ShouldQueue
 
         if ($this->added !== [] && $this->records !== null) {
             $lines[] = 'Custom domain added to '.$this->resourceName.$where.': '.implode(', ', $this->added);
-            if ($this->records === []) {
+            $hosts = collect($this->records)->pluck('fqdn')->map(fn ($fqdn) => ltrim((string) $fqdn, '*.'))->unique();
+            if ($hosts->count() < count($this->added)) {
                 $lines[] = 'Owner: this server has no public IP for DNS yet. Set it in Servers > '.($server?->name ?? 'the server').' > Public IP for DNS, then open the app\'s Domains page for the records.';
+            }
+            if ($this->records !== []) {
+                $lines[] = 'Owner: add these records in Cloudflare (the zone > DNS > Records > Add record), TTL Auto:';
             }
             foreach ($this->records as $record) {
                 $note = $record['purpose'] === 'PR previews' ? ' (PR previews)' : '';
                 $proxy = ($record['proxied'] ?? false) ? 'proxied' : 'DNS only';
-                $what = "{$record['type']}  {$record['name']}  ->  {$record['value']}  in zone {$record['zone']}, {$proxy}{$note}";
-                $lines[] = match ($record['status']) {
-                    'created' => "  Created automatically: {$what}",
-                    'manual' => "  Owner, add in Cloudflare (TTL Auto): {$what}",
-                    default => "  Not created: {$what}. {$record['message']}",
-                };
+                $lines[] = "  {$record['type']}  {$record['name']}  ->  {$record['value']}  in zone {$record['zone']}, {$proxy}{$note}";
             }
-            $lines[] = 'HTTPS starts once the record works; redeploy the app so it answers on the new domain.';
+            if ($hint = availOtherZoneHint($this->records)) {
+                $lines[] = $hint;
+            }
+            $lines[] = 'AvailCoolify has no Cloudflare access, so it can\'t add them itself. HTTPS starts once the records work; redeploy the app so it answers on the new domain.';
         } elseif ($this->added !== []) {
             $lines[] = 'Custom domain added to '.$this->resourceName.$where.': '.implode(', ', $this->added);
             if ($ip === null) {
@@ -146,10 +141,11 @@ class CustomDomainDnsChanged extends Notification implements ShouldQueue
 
         if ($this->removed !== []) {
             $lines[] = 'Custom domain removed from '.$this->resourceName.$where.': '.implode(', ', $this->removed);
-            $lines[] = 'Records AvailCoolify created for it are deleted automatically. Owner: delete any record you added by hand (and its *.<name> record for PR previews) unless something else still uses it.';
+            $lines[] = 'Owner: delete these records in Cloudflare unless something else still uses them:';
             foreach ($this->removed as $host) {
                 $zone = availDnsZoneFor($host);
-                $lines[] = "  {$zone['name']}  in zone {$zone['zone']}";
+                $wildcard = $zone['name'] === '@' ? '*' : '*.'.$zone['name'];
+                $lines[] = "  {$zone['name']}  in zone {$zone['zone']}, and {$wildcard} if it exists (PR previews)";
             }
         }
 

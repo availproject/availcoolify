@@ -32,8 +32,9 @@ use PurplePixie\PhpDns\DNSTypes;
 
 /**
  * Avail: custom domains (outside the server's wildcard domain) only on Git-based apps in production,
- * records as on Vercel (CNAME to the app's address for subdomains, A for root domains) created through
- * the stored Cloudflare token or listed for the Owner, and members asking the Owner to remove them.
+ * the Cloudflare records the Owner adds by hand (CNAME to the app's address for subdomains in Avail's
+ * Cloudflare zones, A otherwise), and members asking the Owner to remove them. AvailCoolify never
+ * calls Cloudflare.
  */
 uses(RefreshDatabase::class);
 
@@ -77,9 +78,21 @@ beforeEach(function () {
         'html_url' => 'https://github.com', 'is_public' => true, 'team_id' => 0,
     ]);
 
-    // DNS: abc.xyz is a zone; nothing resolves unless a test says so.
-    availFakeDns(['abc.xyz', 'example.co.uk', 'apps.avail.test']);
+    // DNS: abc.xyz, example.co.uk and avail.test (the wildcard's zone) are zones; nothing resolves unless a test says so.
+    availFakeDns(['abc.xyz', 'example.co.uk', 'avail.test']);
+    \Illuminate\Support\Facades\Http::fake();
 });
+
+afterEach(function () {
+    // AvailCoolify holds no Cloudflare token and never calls Cloudflare.
+    \Illuminate\Support\Facades\Http::assertNotSent(fn ($request) => str_contains($request->url(), 'api.cloudflare.com'));
+});
+
+/** The Owner's list of zones in Avail's Cloudflare account (Settings -> General). */
+function availOwnZones(string $zones): void
+{
+    InstanceSettings::whereKey(0)->update(['avail_cloudflare_zones' => $zones]);
+}
 
 function availActAs(User $user): void
 {
@@ -384,7 +397,8 @@ test('a clone outside production drops custom domains and gets a generated addre
 
 // --- The Domains page and the Cloudflare record ----------------------------------------------------
 
-test('adding a custom domain on the Domains page saves it and opens the Cloudflare record', function () {
+test('adding a custom domain on the Domains page saves it and opens the records for the Owner to add', function () {
+    availOwnZones('abc.xyz');
     availActAs($this->owner);
     $application = availApp($this->production, ['fqdn' => null]);
 
@@ -395,11 +409,15 @@ test('adding a custom domain on the Domains page saves it and opens the Cloudfla
 
     expect($application->fresh()->fqdn)->toBe('https://test.abc.xyz,https://www.test.abc.xyz');
     $component->assertSee('Owner action needed')
+        ->assertSee('AvailCoolify has no Cloudflare access')
         ->assertSee('CNAME')
         ->assertSee('zone abc.xyz')
         ->assertSee('DNS only (grey cloud)')
-        ->assertSee('Add in Cloudflare')
-        ->assertSee('*.test');
+        ->assertSee('*.test')
+        ->assertSee('203.0.113.10')
+        ->assertDontSee('Created automatically')
+        ->assertDontSee('Being created');
+    Queue::assertPushed(\App\Jobs\AvailCustomDomainNoticeJob::class);
 });
 
 test('the Domains page refuses a custom domain in staging', function () {
@@ -415,31 +433,54 @@ test('the Domains page refuses a custom domain in staging', function () {
     expect($application->fresh()->fqdn)->toBe('https://web-abc123-prod.apps.avail.test');
 });
 
-test('subdomains get a CNAME to the app address and root domains an A record, as on Vercel', function () {
-    $application = availApp($this->production, ['fqdn' => 'https://test.abc.xyz,https://www.example.co.uk,https://abc.xyz,https://web-abc123-prod.apps.avail.test']);
+test('subdomains in Avail zones get a CNAME, root domains, other zones and PR previews an A record', function () {
+    availOwnZones('abc.xyz');
+    $application = availApp($this->production, ['fqdn' => 'https://test.abc.xyz,https://www.example.co.uk,https://abc.xyz,https://shop.avail.test,https://web-abc123-prod.apps.avail.test']);
 
     $records = collect(availApplicationCloudflareRecords($application))->keyBy('fqdn');
-    expect($records->get('test.abc.xyz'))->toMatchArray(['type' => 'CNAME', 'name' => 'test', 'zone' => 'abc.xyz', 'value' => 'web-abc123-prod.apps.avail.test', 'proxied' => false, 'proxy' => 'DNS only (grey cloud)', 'automatic' => false, 'zone_guessed' => false])
-        ->and($records->get('*.test.abc.xyz'))->toMatchArray(['type' => 'CNAME', 'name' => '*.test', 'zone' => 'abc.xyz', 'purpose' => 'PR previews'])
-        ->and($records->get('www.example.co.uk'))->toMatchArray(['type' => 'CNAME', 'name' => 'www', 'zone' => 'example.co.uk'])
-        ->and($records->get('abc.xyz'))->toMatchArray(['type' => 'A', 'name' => '@', 'value' => '203.0.113.10', 'proxied' => false])
+    expect($records->get('test.abc.xyz'))->toMatchArray(['type' => 'CNAME', 'name' => 'test', 'zone' => 'abc.xyz', 'value' => 'web-abc123-prod.apps.avail.test', 'proxied' => false, 'proxy' => 'DNS only (grey cloud)', 'zone_guessed' => false, 'reason' => 'own-zone'])
+        ->and($records->get('*.test.abc.xyz'))->toMatchArray(['type' => 'A', 'name' => '*.test', 'zone' => 'abc.xyz', 'value' => '203.0.113.10', 'proxied' => false, 'purpose' => 'PR previews', 'reason' => 'previews'])
+        ->and($records->get('www.example.co.uk'))->toMatchArray(['type' => 'A', 'name' => 'www', 'zone' => 'example.co.uk', 'value' => '203.0.113.10', 'reason' => 'other-zone'])
+        ->and($records->get('abc.xyz'))->toMatchArray(['type' => 'A', 'name' => '@', 'value' => '203.0.113.10', 'proxied' => false, 'reason' => 'root'])
+        // The wildcard domain's own zone counts without being listed.
+        ->and($records->get('shop.avail.test'))->toMatchArray(['type' => 'CNAME', 'zone' => 'avail.test', 'reason' => 'own-zone'])
         ->and($records->has('*.www.example.co.uk'))->toBeFalse();
+    expect(availOtherZoneHint($records->values()->all()))->toStartWith('example.co.uk is not in the Cloudflare zones list');
 
     expect(availDnsZoneFor('a.b.unknown.dev'))->toMatchArray(['zone' => 'unknown.dev', 'name' => 'a.b', 'guessed' => true]);
 
     $application->settings->forceFill(['is_preview_deployments_enabled' => false])->save();
-    expect(collect(availApplicationCloudflareRecords($application->fresh()))->pluck('fqdn')->all())->toBe(['test.abc.xyz', 'www.example.co.uk', 'abc.xyz']);
+    expect(collect(availApplicationCloudflareRecords($application->fresh()))->pluck('fqdn')->all())->toBe(['test.abc.xyz', 'www.example.co.uk', 'abc.xyz', 'shop.avail.test']);
 });
 
-test('a proxied app address gives a proxied CNAME in a connected zone and falls back to an A record elsewhere', function () {
-    availFakeDns(['abc.xyz', 'other.dev'], ['web-abc123-prod.apps.avail.test' => '104.16.0.1']);
-    $application = availApp($this->production, ['fqdn' => 'https://web-abc123-prod.apps.avail.test,https://test.abc.xyz,https://x.other.dev']);
-    $token = \App\Models\IntegrationToken::factory()->create(['team_id' => 0, 'provider' => 'cloudflare', 'name' => 'Avail Cloudflare']);
-    \App\Models\DnsProviderZone::factory()->for($token)->create(['name' => 'abc.xyz', 'provider_zone_id' => 'zone-abc']);
+test('without the zone in the list a subdomain gets an A record; a proxied app address gives a proxied CNAME', function () {
+    availFakeDns(['abc.xyz', 'avail.test'], ['web-abc123-prod.apps.avail.test' => '104.16.0.1']);
+    $application = availApp($this->production, ['fqdn' => 'https://web-abc123-prod.apps.avail.test,https://test.abc.xyz']);
 
-    $records = collect(availApplicationCloudflareRecords($application))->keyBy('fqdn');
-    expect($records->get('test.abc.xyz'))->toMatchArray(['type' => 'CNAME', 'value' => 'web-abc123-prod.apps.avail.test', 'proxied' => true, 'automatic' => true])
-        ->and($records->get('x.other.dev'))->toMatchArray(['type' => 'A', 'value' => '203.0.113.10', 'proxied' => false, 'automatic' => false]);
+    expect(collect(availApplicationCloudflareRecords($application))->firstWhere('fqdn', 'test.abc.xyz'))
+        ->toMatchArray(['type' => 'A', 'value' => '203.0.113.10', 'proxied' => false, 'reason' => 'other-zone']);
+
+    availOwnZones('ABC.xyz.');
+    expect(collect(availApplicationCloudflareRecords($application->fresh()))->firstWhere('fqdn', 'test.abc.xyz'))
+        ->toMatchArray(['type' => 'CNAME', 'value' => 'web-abc123-prod.apps.avail.test', 'proxied' => true, 'proxy' => 'Proxied (orange cloud)']);
+});
+
+test('the Owner lists the Cloudflare zones under Settings, entries are cleaned and checked', function () {
+    config()->set('constants.coolify.self_hosted', false);
+    availActAs($this->owner);
+
+    Livewire::test(\App\Livewire\Settings\Index::class)
+        ->set('avail_cloudflare_zones', " Avail.so,availproject.org.\nAVAIL.so ")
+        ->call('instantSave')
+        ->assertDispatched('success')
+        ->assertSet('avail_cloudflare_zones', 'avail.so, availproject.org');
+    expect(InstanceSettings::find(0)->avail_cloudflare_zones)->toBe('avail.so, availproject.org')
+        ->and(availOwnCloudflareZones($this->server))->toBe(['avail.so', 'availproject.org', 'avail.test']);
+
+    expect(fn () => Livewire::test(\App\Livewire\Settings\Index::class)
+        ->set('avail_cloudflare_zones', 'avail.so, https://abc.xyz/path')
+        ->call('instantSave'))->toThrow(\Exception::class, '"https://abc.xyz/path" is not a zone name');
+    expect(InstanceSettings::find(0)->avail_cloudflare_zones)->toBe('avail.so, availproject.org');
 });
 
 test('without a public IP for DNS the card asks the Owner to set one for root domains', function () {
@@ -474,110 +515,67 @@ test('the public IP for DNS is set on the server page and must be public', funct
 
 // --- DNS check -------------------------------------------------------------------------------------
 
-test('a proxied root domain fails the DNS check, proxied subdomains and wildcard addresses pass', function () {
+test('proxied root domains and proxied subdomains outside Avail zones fail the DNS check, proxied CNAMEs in Avail zones pass', function () {
     InstanceSettings::whereKey(0)->update(['is_dns_validation_enabled' => true]);
     \Illuminate\Support\Once::flush();
-    availFakeDns(['abc.xyz'], ['abc.xyz' => '104.16.0.1', 'test.abc.xyz' => '104.16.0.1', 'web.apps.avail.test' => '104.16.0.1', 'good.abc.xyz' => '203.0.113.10']);
+    availOwnZones('abc.xyz');
+    availFakeDns(['abc.xyz', 'other.dev', 'avail.test'], [
+        'abc.xyz' => '104.16.0.1', 'test.abc.xyz' => '104.16.0.1', 'web.apps.avail.test' => '104.16.0.1',
+        'good.abc.xyz' => '203.0.113.10', 'x.other.dev' => '104.16.0.1', 'y.other.dev' => '203.0.113.10',
+    ]);
     $server = $this->server->fresh();
 
     $results = CheckDomainDns::run([
-        'root' => 'https://abc.xyz', 'sub' => 'https://test.abc.xyz', 'wildcard' => 'https://web.apps.avail.test', 'good' => 'https://good.abc.xyz',
+        'root' => 'https://abc.xyz', 'sub' => 'https://test.abc.xyz', 'wildcard' => 'https://web.apps.avail.test',
+        'good' => 'https://good.abc.xyz', 'other' => 'https://x.other.dev', 'otherA' => 'https://y.other.dev', 'missing' => 'https://none.abc.xyz',
     ], $server, '203.0.113.10');
 
     expect($results['root'])->toMatchArray(['status' => 'failed', 'message' => availProxiedCustomDomainMessage()])
         ->and($results['sub']['status'])->toBe('ok')
         ->and($results['wildcard']['status'])->toBe('ok')
         ->and($results['good']['status'])->toBe('ok')
+        ->and($results['other'])->toMatchArray(['status' => 'failed', 'message' => availProxiedCustomDomainMessage()])
+        ->and($results['otherA']['status'])->toBe('ok')
+        ->and($results['missing'])->toMatchArray(['status' => 'failed', 'message' => 'Not pointing here yet. Add the CNAME record shown under DNS entries.'])
         ->and(validateDNSEntry('https://abc.xyz', $server))->toBeFalse()
-        ->and(validateDNSEntry('https://test.abc.xyz', $server))->toBeTrue();
+        ->and(validateDNSEntry('https://test.abc.xyz', $server))->toBeTrue()
+        ->and(validateDNSEntry('https://x.other.dev', $server))->toBeFalse();
 });
 
-// --- Automatic records through the stored Cloudflare token ---------------------------------------
+// --- The Owner adds the records by hand -------------------------------------------------------------
 
-function availConnectZone(string $zone = 'abc.xyz'): \App\Models\DnsProviderZone
-{
-    $token = \App\Models\IntegrationToken::factory()->create(['team_id' => 0, 'provider' => 'cloudflare', 'name' => 'Avail Cloudflare', 'token' => 'cf-test-token']);
-
-    return \App\Models\DnsProviderZone::factory()->for($token)->create(['name' => $zone, 'provider_zone_id' => 'zone-abc']);
-}
-
-function availFakeCloudflare(): \ArrayObject
-{
-    $created = new \ArrayObject;
-    \Illuminate\Support\Facades\Http::fake(function (\Illuminate\Http\Client\Request $request) use ($created) {
-        if ($request->method() === 'GET' && str_contains($request->url(), '/dns_records?')) {
-            return \Illuminate\Support\Facades\Http::response(['success' => true, 'result' => []]);
-        }
-        if ($request->method() === 'POST' && str_ends_with($request->url(), '/dns_records')) {
-            $created->append($request->data());
-
-            return \Illuminate\Support\Facades\Http::response(['success' => true, 'result' => ['id' => 'rec-'.count($created), ...$request->data()]]);
-        }
-        if ($request->method() === 'GET' && preg_match('#/dns_records/(rec-\d+)$#', $request->url(), $m)) {
-            $data = $created[(int) substr($m[1], 4) - 1];
-
-            return \Illuminate\Support\Facades\Http::response(['success' => true, 'result' => ['id' => $m[1], ...$data]]);
-        }
-        if ($request->method() === 'DELETE') {
-            return \Illuminate\Support\Facades\Http::response(['success' => true, 'result' => ['id' => 'x']]);
-        }
-
-        return \Illuminate\Support\Facades\Http::response(['success' => false], 400);
-    });
-
-    return $created;
-}
-
-test('a new custom domain gets its records created in the connected Cloudflare zone and the Owner is told', function () {
-    availConnectZone();
-    $created = availFakeCloudflare();
+test('a new custom domain queues a notice that lists the records for the Owner to add', function () {
+    availOwnZones('abc.xyz');
     $application = availApp($this->production, ['fqdn' => 'https://web-abc123-prod.apps.avail.test']);
 
-    $application->update(['fqdn' => 'https://test.abc.xyz,https://web-abc123-prod.apps.avail.test']);
-    Queue::assertPushed(\App\Jobs\AvailCustomDomainDnsJob::class, fn ($job) => $job->hosts === ['test.abc.xyz']);
+    $application->update(['fqdn' => 'https://test.abc.xyz,https://www.example.co.uk,https://web-abc123-prod.apps.avail.test']);
+    Queue::assertPushed(\App\Jobs\AvailCustomDomainNoticeJob::class, fn ($job) => $job->hosts === ['test.abc.xyz', 'www.example.co.uk']);
     Notification::assertNothingSent();
 
-    (new \App\Jobs\AvailCustomDomainDnsJob($application->id, ['test.abc.xyz']))->handle();
+    (new \App\Jobs\AvailCustomDomainNoticeJob($application->id, ['test.abc.xyz', 'www.example.co.uk']))->handle();
 
-    expect(collect($created->getArrayCopy())->map(fn ($r) => [$r['type'], $r['name'], $r['content'], $r['proxied']])->all())
-        ->toBe([['CNAME', 'test.abc.xyz', 'web-abc123-prod.apps.avail.test', false], ['CNAME', '*.test.abc.xyz', 'web-abc123-prod.apps.avail.test', false]])
-        ->and(availHasManagedRecord($application, 'test.abc.xyz'))->toBeTrue()
-        ->and(availHasManagedRecord($application, '*.test.abc.xyz'))->toBeTrue();
     Notification::assertSentTo($this->team, CustomDomainDnsChanged::class, function (CustomDomainDnsChanged $notice) {
         $text = implode("\n", $notice->lines());
 
-        return $notice->title() === 'Custom domain added: DNS record created'
-            && str_contains($text, 'Created automatically: CNAME  test  ->  web-abc123-prod.apps.avail.test  in zone abc.xyz, DNS only')
+        return $notice->title() === 'Custom domain added: add the Cloudflare record'
+            && str_contains($text, 'Owner: add these records in Cloudflare')
+            && str_contains($text, '  CNAME  test  ->  web-abc123-prod.apps.avail.test  in zone abc.xyz, DNS only')
+            && str_contains($text, '  A  *.test  ->  203.0.113.10  in zone abc.xyz, DNS only (PR previews)')
+            && str_contains($text, '  A  www  ->  203.0.113.10  in zone example.co.uk, DNS only')
+            && str_contains($text, 'example.co.uk is not in the Cloudflare zones list')
+            && str_contains($text, 'AvailCoolify has no Cloudflare access')
             && str_contains($text, 'Domains page: https://deploy.avail.test/project/');
     });
-
-    // The Domains page shows them as created.
-    availActAs($this->owner);
-    $application->forceFill(['domain_dns_statuses' => null])->saveQuietly();
-    Livewire::test(Domains::class, ['application' => $application->fresh()])
-        ->assertSee('Created automatically')
-        ->assertSee('web-abc123-prod.apps.avail.test');
-
-    // When an admin or the Owner removes the domain, the PR preview wildcard AvailCoolify created goes too.
-    $application->fresh()->update(['fqdn' => 'https://web-abc123-prod.apps.avail.test']);
-    Queue::assertPushed(\App\Jobs\ReleaseRemovedDnsHostnamesJob::class);
+    expect(\App\Models\ManagedDnsRecord::count())->toBe(0);
 });
 
-test('records in zones that are not connected are listed for the Owner, existing records are not overwritten', function () {
-    availConnectZone();
-    \Illuminate\Support\Facades\Http::fake([
-        'https://api.cloudflare.com/client/v4/zones/zone-abc/dns_records?*' => \Illuminate\Support\Facades\Http::response(['success' => true, 'result' => [
-            ['id' => 'old', 'type' => 'CNAME', 'name' => 'test.abc.xyz', 'content' => 'somewhere.else.com'],
-        ]]),
-    ]);
-    $application = availApp($this->production, ['fqdn' => 'https://test.abc.xyz,https://www.example.co.uk']);
-    $application->settings->forceFill(['is_preview_deployments_enabled' => false])->save();
+test('without a public IP for DNS the notice asks the Owner to set it', function () {
+    $this->server->settings->forceFill(['avail_dns_public_ip' => null])->save();
+    $application = availApp($this->production, ['fqdn' => 'https://web-abc123-prod.apps.avail.test,https://abc.xyz']);
+    (new \App\Jobs\AvailCustomDomainNoticeJob($application->id, ['abc.xyz']))->handle();
 
-    $results = collect(availProvisionCustomDomainDns($application->fresh(), ['test.abc.xyz', 'www.example.co.uk']))->keyBy('fqdn');
-    expect($results->get('test.abc.xyz'))->toMatchArray(['status' => 'conflict'])
-        ->and($results->get('test.abc.xyz')['message'])->toContain('somewhere.else.com')
-        ->and($results->get('www.example.co.uk'))->toMatchArray(['status' => 'manual', 'type' => 'CNAME']);
-    \Illuminate\Support\Facades\Http::assertNotSent(fn ($request) => $request->method() === 'POST');
+    Notification::assertSentTo($this->team, CustomDomainDnsChanged::class,
+        fn ($notice) => str_contains(implode("\n", $notice->lines()), 'this server has no public IP for DNS yet'));
 });
 
 // --- Members: add on their own apps, ask the Owner to remove -----------------------------------------
@@ -637,14 +635,10 @@ test('members cannot remove custom domains or delete an app that has them, they 
 });
 
 test('the Owner approves or rejects removal requests on the dashboard', function () {
-    availConnectZone();
-    availFakeCloudflare();
     $member = User::factory()->create();
     $member->teams()->attach(0, ['role' => 'member']);
     $application = availApp($this->production, ['fqdn' => 'https://web-abc123-prod.apps.avail.test,https://mine.abc.xyz,https://keep.abc.xyz']);
     $application->forceFill(['avail_created_by_user_id' => $member->id])->save();
-    (new \App\Jobs\AvailCustomDomainDnsJob($application->id, ['mine.abc.xyz', 'keep.abc.xyz']))->handle();
-    expect(availHasManagedRecord($application, 'mine.abc.xyz'))->toBeTrue();
 
     availActAs($member);
     $remove = availRequestDomainRemoval($application->fresh(), 'mine.abc.xyz', $member);
@@ -664,10 +658,10 @@ test('the Owner approves or rejects removal requests on the dashboard', function
     expect($application->fresh()->fqdn)->toBe('https://web-abc123-prod.apps.avail.test,https://keep.abc.xyz')
         ->and($remove->fresh()->status)->toBe('approved')
         ->and($remove->fresh()->decided_by)->toBe($this->owner->id)
-        ->and($keep->fresh()->status)->toBe('rejected')
-        ->and(availHasManagedRecord($application, 'mine.abc.xyz'))->toBeFalse()
-        ->and(availHasManagedRecord($application, 'keep.abc.xyz'))->toBeTrue();
-    \Illuminate\Support\Facades\Http::assertSent(fn ($request) => $request->method() === 'DELETE');
+        ->and($keep->fresh()->status)->toBe('rejected');
+    // The Owner is told which records to delete in Cloudflare.
+    Notification::assertSentTo($this->team, CustomDomainDnsChanged::class, fn ($notice) => $notice->removed === ['mine.abc.xyz']
+        && str_contains(implode("\n", $notice->lines()), '  mine  in zone abc.xyz, and *.mine if it exists (PR previews)'));
     $dashboard->assertDontSee('Approve removal');
 });
 
@@ -675,7 +669,7 @@ test('the Owner approves or rejects removal requests on the dashboard', function
 
 test('removing and deleting custom domains tell the team channels', function () {
     $application = availApp($this->production, ['fqdn' => 'https://test.abc.xyz']);
-    Queue::assertPushed(\App\Jobs\AvailCustomDomainDnsJob::class);
+    Queue::assertPushed(\App\Jobs\AvailCustomDomainNoticeJob::class);
     Notification::assertNothingSent();
 
     $application->fresh()->update(['name' => 'renamed']);
@@ -683,25 +677,14 @@ test('removing and deleting custom domains tell the team channels', function () 
 
     $application->fresh()->update(['fqdn' => 'https://web.apps.avail.test']);
     Notification::assertSentTo($this->team, CustomDomainDnsChanged::class, fn ($notice) => $notice->removed === ['test.abc.xyz']
-        && str_contains(implode("\n", $notice->lines()), 'Records AvailCoolify created for it are deleted automatically'));
+        && $notice->title() === 'Custom domain removed: delete the Cloudflare records'
+        && str_contains(implode("\n", $notice->lines()), 'Owner: delete these records in Cloudflare'));
 
     $other = availApp($this->production, ['name' => 'other', 'fqdn' => 'https://other.abc.xyz']);
     $other->delete();
     Notification::assertSentTo($this->team, CustomDomainDnsChanged::class, fn ($notice) => $notice->removed === ['other.abc.xyz']);
     $other->forceDelete();
     Notification::assertSentToTimes($this->team, CustomDomainDnsChanged::class, 2);
-});
-
-test('a domain added without a connected zone is listed for the Owner in the notice', function () {
-    $application = availApp($this->production, ['fqdn' => 'https://web-abc123-prod.apps.avail.test,https://test.abc.xyz']);
-    (new \App\Jobs\AvailCustomDomainDnsJob($application->id, ['test.abc.xyz']))->handle();
-
-    Notification::assertSentTo($this->team, CustomDomainDnsChanged::class, function (CustomDomainDnsChanged $notice) {
-        $text = implode("\n", $notice->lines());
-
-        return $notice->title() === 'Custom domain added: add the Cloudflare record'
-            && str_contains($text, 'Owner, add in Cloudflare (TTL Auto): CNAME  test  ->  web-abc123-prod.apps.avail.test  in zone abc.xyz, DNS only');
-    });
 });
 
 test('the Owner gets the notice by email when transactional email is set up', function () {
@@ -721,6 +704,7 @@ test('the Owner gets the notice by email when transactional email is set up', fu
 // --- The Owner's dashboard list -----------------------------------------------------------------
 
 test('the Owner sees every custom domain with its record on the dashboard, admins do not', function () {
+    availOwnZones('abc.xyz');
     $application = availApp($this->production, ['fqdn' => 'https://web-abc123-prod.apps.avail.test,https://test.abc.xyz']);
     availGrandfather(availApp($this->staging, ['name' => 'legacy']), 'https://old.abc.xyz');
     $application->forceFill(['domain_dns_statuses' => ['https://test.abc.xyz' => ['status' => 'failed', 'message' => 'not yet', 'expected_ip' => '203.0.113.10', 'checked_at' => now()->toIso8601String()]]])->saveQuietly();

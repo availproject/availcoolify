@@ -54,7 +54,7 @@ class AvailDomainRemovalRequest extends Model
                 $mail = (new MailMessage)
                     ->subject('AvailCoolify: custom domain removal '.($approved ? 'approved' : 'rejected'))
                     ->line($approved
-                        ? "The Owner removed {$request->host} from {$app}. Records AvailCoolify created for it were deleted too."
+                        ? "The Owner removed {$request->host} from {$app}. Redeploy the app so it stops answering on it."
                         : "The Owner kept {$request->host} on {$app}. Ask them if you need to know why.");
                 send_user_an_email($mail, $email);
             } catch (\Throwable $e) {

@@ -1149,8 +1149,8 @@ class Domains extends Component
             $this->dispatch('close-modal');
             $this->refreshDomains();
             $addedUrls = array_values(array_unique(array_merge($newUrls, $pairedUrls)));
-            // Avail: custom domains get their DNS records from AvailCustomDomainDnsJob (every save path, members
-            // included), so upstream's own automatic DNS step is skipped; the records window opens right away.
+            // Avail: AvailCoolify never writes DNS (the Owner adds the records by hand, told by
+            // AvailCustomDomainNoticeJob), so upstream's automatic DNS step is skipped; the records window opens.
             if ($this->availHasCustomDomain($addedUrls)) {
                 $this->dispatch('open-dns-records-modal');
             }

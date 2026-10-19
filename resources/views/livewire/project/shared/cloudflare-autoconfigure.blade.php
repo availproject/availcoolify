@@ -107,21 +107,18 @@
 @php
     $dnsHints = $this->dnsRecordHints();
     $dnsCopyText = $this->dnsRecordsCopyText();
-    // Avail: custom domains get their Cloudflare record (CNAME for a subdomain, A for a root domain), created
-    // automatically when the zone is connected, instead of the generic list.
+    // Avail: custom domains get the Cloudflare records the Owner adds by hand (CNAME for a subdomain in one
+    // of Avail's Cloudflare zones, A otherwise), instead of the generic list.
     $availCustomMode = availCustomDomainRulesEnabled() && method_exists($this, 'availCloudflareRecords');
-    $availRecords = $availCustomMode ? collect($this->availCloudflareRecords())->map(fn (array $r) => [
-        ...$r,
-        'state' => ! $r['automatic'] ? 'manual' : (availHasManagedRecord($this->application, $r['fqdn']) ? 'created' : 'creating'),
-    ])->all() : [];
-    $availManualRecords = collect($availRecords)->where('state', 'manual')->values()->all();
+    $availRecords = $availCustomMode ? $this->availCloudflareRecords() : [];
+    $availOtherZoneHint = availOtherZoneHint($availRecords);
     $availPendingCustomHosts = [];
     if ($availCustomMode) {
         $availPendingCustomHosts = $this->availPendingCustomHosts();
         $dnsHints = collect($dnsHints)->reject(fn (array $record) => in_array($record['name'], $availPendingCustomHosts, true))->values()->all();
         $dnsCopyText = \App\Support\DnsRecordHints::toCopyText($dnsHints);
     }
-    $availCopyText = collect($availManualRecords)->map(fn (array $r) => "{$r['type']}  {$r['name']}  {$r['value']}  (zone {$r['zone']}, {$r['proxy']})")->implode("\n");
+    $availCopyText = collect($availRecords)->map(fn (array $r) => "{$r['type']}  {$r['name']}  {$r['value']}  (zone {$r['zone']}, {$r['proxy']})")->implode("\n");
 @endphp
 <div
     x-data="{
@@ -178,15 +175,11 @@
 
                         @if ($availCustomMode && ($availRecords !== [] || $availPendingCustomHosts !== []))
                             <div class="flex flex-col gap-3" data-avail-cloudflare-records>
-                                @if ($availManualRecords !== [])
+                                @if ($availRecords !== [])
                                     <x-callout type="warning" title="Owner action needed">
-                                        The zone of {{ count($availManualRecords) === 1 ? 'this record' : 'these records' }} isn&#39;t connected to
-                                        AvailCoolify (Security → Integration tokens), so the Owner adds the records marked
-                                        &quot;Add in Cloudflare&quot; by hand. The Owner also gets a notice.
-                                    </x-callout>
-                                @elseif ($availRecords !== [])
-                                    <x-callout type="info" title="Created automatically">
-                                        AvailCoolify creates these records in Cloudflare through the connected token. Press Recheck in a minute.
+                                        AvailCoolify has no Cloudflare access, so the Owner adds
+                                        {{ count($availRecords) === 1 ? 'this record' : 'these records' }} by hand in Cloudflare.
+                                        The Owner also gets a notice with them.
                                     </x-callout>
                                 @endif
                                 @if ($availRecords === [])
@@ -204,7 +197,7 @@
                                                     <th class="px-3 py-2 font-medium">Name</th>
                                                     <th class="px-3 py-2 font-medium">Target / IP address</th>
                                                     <th class="px-3 py-2 font-medium">Proxy status</th>
-                                                    <th class="px-3 py-2 font-medium">Status</th>
+                                                    <th class="px-3 py-2 font-medium">TTL</th>
                                                 </tr>
                                             </thead>
                                             <tbody class="divide-y divide-neutral-200 dark:divide-coolgray-300">
@@ -230,35 +223,26 @@
                                                             ])
                                                         </td>
                                                         <td class="px-3 py-2.5 whitespace-nowrap">{{ $record['proxy'] }}</td>
-                                                        <td class="px-3 py-2.5 whitespace-nowrap">
-                                                            @if ($record['state'] === 'created')
-                                                                <x-status-badge status="Created" type="success" />
-                                                            @elseif ($record['state'] === 'creating')
-                                                                <x-status-badge status="Being created" type="neutral" />
-                                                            @else
-                                                                <x-status-badge status="Add in Cloudflare" type="warning" />
-                                                            @endif
-                                                        </td>
+                                                        <td class="px-3 py-2.5 whitespace-nowrap">{{ $record['ttl'] }}</td>
                                                     </tr>
                                                 @endforeach
                                             </tbody>
                                         </table>
                                     </div>
-                                    @if ($availManualRecords !== [])
-                                        <ol class="list-decimal space-y-1 pl-5 text-[13px] leading-6 text-neutral-600 dark:text-fg-dim">
-                                            <li>Cloudflare → the zone above → DNS → Records → Add record.</li>
-                                            <li>Paste the type, name and target, set the proxy status shown, TTL Auto.</li>
-                                            <li>Save, then press Recheck here and redeploy the app. The HTTPS certificate follows automatically.</li>
-                                        </ol>
-                                        <div class="flex justify-end">
-                                            <button type="button" class="button shrink-0" title="Copy the records to add" x-data="copyButton"
-                                                @click.prevent="copy(@js($availCopyText))">
-                                                <span x-text="copied ? 'Copied' : 'Copy all'"></span>
-                                            </button>
-                                        </div>
-                                    @else
-                                        <p class="text-[13px] leading-6 text-neutral-600 dark:text-fg-dim">Once the check is green, redeploy the app so it answers on the new domain.</p>
+                                    @if ($availOtherZoneHint)
+                                        <p class="text-[13px] leading-6 text-neutral-600 dark:text-fg-dim" data-avail-other-zone>{{ $availOtherZoneHint }}</p>
                                     @endif
+                                    <ol class="list-decimal space-y-1 pl-5 text-[13px] leading-6 text-neutral-600 dark:text-fg-dim">
+                                        <li>Cloudflare → the zone above → DNS → Records → Add record.</li>
+                                        <li>Pick the type, paste the name and target, set the proxy status shown, TTL Auto.</li>
+                                        <li>Save, then press Recheck here and redeploy the app. The HTTPS certificate follows automatically.</li>
+                                    </ol>
+                                    <div class="flex justify-end">
+                                        <button type="button" class="button shrink-0" title="Copy the records to add" x-data="copyButton"
+                                            @click.prevent="copy(@js($availCopyText))">
+                                            <span x-text="copied ? 'Copied' : 'Copy all'"></span>
+                                        </button>
+                                    </div>
                                 @endif
                             </div>
                         @endif

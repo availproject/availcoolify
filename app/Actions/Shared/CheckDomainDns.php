@@ -112,8 +112,8 @@ class CheckDomainDns
         if ($proxied && ! $proxyAllowed) {
             return $this->result('failed', availProxiedCustomDomainMessage(), $expectedIp);
         }
-        // Avail: a custom subdomain needs a CNAME to the app's address, not an A record.
-        if (availCustomDomainRulesEnabled() && availIsCustomDomainHost($host, availWildcardHost($server)) && ! availIsRootDomain($host)) {
+        // Avail: a custom subdomain in one of Avail's Cloudflare zones needs a CNAME to the app's address.
+        if (availCustomDomainRulesEnabled() && availIsCustomDomainHost($host, availWildcardHost($server)) && ! availIsRootDomain($host) && availHostInOwnCloudflareZone($host, $server)) {
             return $this->result('failed', 'Not pointing here yet. Add the CNAME record shown under DNS entries.', $expectedIp);
         }
 

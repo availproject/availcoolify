@@ -8,7 +8,7 @@
             {{-- instance_timezone auto-saves via $wire.set + submit; exclude it so
                  the bar does not flash while the snapshot catches up. --}}
             <x-unsaved-bar action="submit"
-                targets="fqdn,instance_name,public_ipv4,public_ipv6,dev_helper_version" />
+                targets="fqdn,instance_name,public_ipv4,public_ipv6,dev_helper_version,avail_cloudflare_zones" />
             <x-application.settings-section title="General">
                 <div class="grid gap-4 lg:grid-cols-2">
                     <div @class([
@@ -64,6 +64,14 @@
                         helper="Coolify detects this address on start only when the field is empty. Set it when the detected address is wrong. Detect looks it up again and saves it."
                         placeholder="2001:db8::1" autocomplete="new-password" />
                 </div>
+            </x-application.settings-section>
+
+            {{-- Avail: which custom domains get a CNAME (see bootstrap/helpers/avail-custom-domains.php). --}}
+            <x-application.settings-section title="Custom domains">
+                <x-forms.input canGate="update" :canResource="$settings" id="avail_cloudflare_zones"
+                    label="Cloudflare zones"
+                    helper="Zones in Avail's Cloudflare account, comma separated (for example availproject.org, avail.so). Custom subdomains in these zones get a CNAME to the app's own address; root domains and other zones get an A record, DNS only. The zone of the server's wildcard domain counts without being listed. AvailCoolify never changes DNS itself: the Owner adds the records shown."
+                    placeholder="availproject.org, avail.so" />
             </x-application.settings-section>
 
             @if (isDev())

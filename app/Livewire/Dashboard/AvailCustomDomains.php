@@ -8,8 +8,8 @@ use Livewire\Attributes\Lazy;
 use Livewire\Component;
 
 /**
- * Avail: the Owner's list of custom domains: every custom domain, whether its DNS works, its record
- * (created automatically or still to add by hand), and the members' removal requests to approve or
+ * Avail: the Owner's list of custom domains: every custom domain, whether its DNS works, the record to
+ * add in Cloudflare, and the members' removal requests to approve or
  * reject. Domains kept where the rules no longer allow them (outside production, not deployed from Git,
  * services) are flagged.
  */
@@ -101,9 +101,7 @@ class AvailCustomDomains extends Component
             if ($hosts === []) {
                 continue;
             }
-            $records = collect(availApplicationCloudflareRecords($application))
-                ->map(fn (array $record) => [...$record, 'created' => availHasManagedRecord($application, $record['fqdn'])])
-                ->keyBy('fqdn');
+            $records = collect(availApplicationCloudflareRecords($application))->keyBy('fqdn');
             $kept = availApplicationCustomDomainRuleError($application) !== null;
             $environment = $application->environment;
             $project = $environment?->project;

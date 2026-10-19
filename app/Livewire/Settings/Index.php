@@ -44,6 +44,10 @@ class Index extends Component
     #[Validate(['nullable', 'string', 'max:128', 'regex:/^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$/'])]
     public ?string $dev_helper_version = null;
 
+    /** Avail: zones in Avail's Cloudflare account; custom subdomains there get a CNAME instead of an A record. */
+    #[Validate('nullable|string|max:2000')]
+    public ?string $avail_cloudflare_zones = null;
+
     public array $domainConflicts = [];
 
     public bool $showDomainConflictModal = false;
@@ -79,6 +83,7 @@ class Index extends Component
         $this->public_ipv6 = $this->settings->public_ipv6;
         $this->instance_timezone = $this->settings->instance_timezone;
         $this->dev_helper_version = $this->settings->dev_helper_version;
+        $this->avail_cloudflare_zones = $this->settings->avail_cloudflare_zones;
     }
 
     #[Computed]
@@ -94,6 +99,12 @@ class Index extends Component
     {
         $this->authorize('update', $this->settings);
         $this->validate();
+        $zones = availParseCloudflareZones($this->avail_cloudflare_zones);
+        if ($invalid = availInvalidCloudflareZone($zones)) {
+            throw new \Exception("Cloudflare zones: \"{$invalid}\" is not a zone name. Use names like example.com, without https:// or paths.");
+        }
+        $this->avail_cloudflare_zones = $zones === [] ? null : implode(', ', $zones);
+        $this->settings->avail_cloudflare_zones = $this->avail_cloudflare_zones;
         $this->settings->fqdn = $this->fqdn ? trim($this->fqdn) : $this->fqdn;
         $this->settings->is_dashboard_force_https_enabled = $this->is_dashboard_force_https_enabled;
         $this->settings->public_port_min = $this->public_port_min;

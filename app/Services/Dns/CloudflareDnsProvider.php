@@ -111,15 +111,15 @@ class CloudflareDnsProvider
      *
      * @throws LockTimeoutException when another change for the hostname does not finish in time
      */
-    public function createRecord(DnsProviderZone $zone, string $hostname, string $content, ?Model $resource = null, array $additionalResources = [], ?bool $proxied = null): ManagedDnsRecord
+    public function createRecord(DnsProviderZone $zone, string $hostname, string $content, ?Model $resource = null, array $additionalResources = []): ManagedDnsRecord
     {
         $hostname = strtolower(rtrim($hostname, '.'));
 
         return $this->hostnameLock->run(
             (int) $zone->integrationToken->team_id,
             $hostname,
-            function () use ($zone, $hostname, $content, $resource, $additionalResources, $proxied): ManagedDnsRecord {
-                $record = $this->createRecordLocked($zone, $hostname, $content, $resource, $proxied);
+            function () use ($zone, $hostname, $content, $resource, $additionalResources): ManagedDnsRecord {
+                $record = $this->createRecordLocked($zone, $hostname, $content, $resource);
                 foreach ($additionalResources as $additionalResource) {
                     $record->addReference($additionalResource);
                 }
@@ -129,7 +129,7 @@ class CloudflareDnsProvider
         );
     }
 
-    private function createRecordLocked(DnsProviderZone $zone, string $hostname, string $content, ?Model $resource, ?bool $proxied = null): ManagedDnsRecord
+    private function createRecordLocked(DnsProviderZone $zone, string $hostname, string $content, ?Model $resource): ManagedDnsRecord
     {
         $type = $this->recordType($content);
         $remoteRecords = $this->findRecords($zone, $hostname, $type);
@@ -154,8 +154,7 @@ class CloudflareDnsProvider
         $uuid = new_public_id();
         $response = $this->client($zone->integrationToken)->post("https://api.cloudflare.com/client/v4/zones/{$zone->provider_zone_id}/dns_records", [
             'type' => $type, 'name' => $hostname, 'content' => $content, 'ttl' => 1,
-            // Avail: the caller may decide per record (a CNAME follows its target); otherwise the credential's setting.
-            'proxied' => $proxied ?? $zone->integrationToken->proxiedDnsEnabled(),
+            'proxied' => $zone->integrationToken->proxiedDnsEnabled(),
             'comment' => ManagedDnsRecord::ownershipCommentFor($uuid),
         ]);
         if (! $response->successful() || ! is_string($response->json('result.id'))) {
@@ -338,10 +337,6 @@ class CloudflareDnsProvider
 
     private function recordType(string $content): string
     {
-        if (filter_var($content, FILTER_VALIDATE_IP) === false) {
-            return 'CNAME'; // Avail: custom subdomains point at the app's own address
-        }
-
         return filter_var($content, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) ? 'AAAA' : 'A';
     }
 

@@ -2,7 +2,7 @@
     @if ($requests !== [])
         <section class="mb-4! min-w-0" data-avail-removal-requests>
             <x-section-heading title="Custom domain removal requests"
-                subtitle="Members can’t remove custom domains themselves. Approving removes the domain and the records AvailCoolify created for it." />
+                subtitle="Members can’t remove custom domains themselves. Approving removes the domain; you then get a notice with the Cloudflare records to delete." />
             <div class="overflow-x-auto rounded-md border border-neutral-200 dark:border-coolgray-300">
                 <table class="w-full min-w-[40rem] text-left text-sm">
                     <thead class="bg-neutral-50 text-[12px] uppercase tracking-wide text-neutral-500 dark:bg-coolgray-100 dark:text-fg-dim">
@@ -45,7 +45,7 @@
     @if ($rows !== [])
         <section class="mb-0! min-w-0" data-avail-custom-domains>
             <x-section-heading title="Custom domains"
-                subtitle="Records are created automatically in Cloudflare zones connected under Security → Integration tokens. Those marked “add in Cloudflare” are yours to add: TTL Auto, proxy status as shown." />
+                subtitle="AvailCoolify has no Cloudflare access: add each record in Cloudflare (DNS → Records → Add record), TTL Auto, proxy status as shown. Subdomains in the zones listed under Settings → General get a CNAME." />
             <div class="overflow-x-auto rounded-md border border-neutral-200 dark:border-coolgray-300">
                 <table class="w-full min-w-[40rem] text-left text-sm">
                     <thead class="bg-neutral-50 text-[12px] uppercase tracking-wide text-neutral-500 dark:bg-coolgray-100 dark:text-fg-dim">
@@ -91,14 +91,7 @@
                                             <div>{{ $row['preview_record']['type'] }} {{ $row['preview_record']['name'] }} → {{ $row['preview_record']['value'] }} <span class="font-sans text-neutral-500 dark:text-fg-dim">(PR previews)</span></div>
                                         @endif
                                         <div class="font-sans text-neutral-500 dark:text-fg-dim">
-                                            zone {{ $row['record']['zone'] }} · {{ ($row['record']['proxied'] ?? false) ? 'proxied' : 'DNS only' }} ·
-                                            @if ($row['record']['created'] ?? false)
-                                                created automatically
-                                            @elseif ($row['record']['automatic'] ?? false)
-                                                being created
-                                            @else
-                                                add in Cloudflare
-                                            @endif
+                                            zone {{ $row['record']['zone'] }} · {{ ($row['record']['proxied'] ?? false) ? 'proxied' : 'DNS only' }} · add in Cloudflare
                                         </div>
                                     @else
                                         <span class="font-sans text-neutral-500 dark:text-fg-dim">Set the server&#39;s Public IP for DNS first (Servers → General).</span>

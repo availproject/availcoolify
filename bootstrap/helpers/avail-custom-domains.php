@@ -14,13 +14,17 @@
  * Pasted-Dockerfile apps, Docker image apps and one-click services never get one. Custom domains that
  * already exist where they are no longer allowed stay and keep working, but nothing can be added.
  *
- * DNS, as Vercel does it: a subdomain gets a CNAME to the app's own address (<app>.apps.avail.so), a
- * root domain an A record to the server's public IP. When the zone is in a Cloudflare account the Owner
- * connected (Security -> Integration tokens), the record is created automatically; otherwise the Domains
- * page and the notice show it for the Owner to add by hand.
+ * DNS: AvailCoolify has no Cloudflare access. The Domains page and the notice show the records for the
+ * Owner to add by hand in Cloudflare:
+ *   - root domain (abc.com): A to the server's public IP, DNS only
+ *   - subdomain in a zone of Avail's Cloudflare account (Settings -> General -> Cloudflare zones, plus the
+ *     wildcard domain's own zone): CNAME to the app's own address (<app>.apps.avail.so), proxied exactly
+ *     when that address is. A proxied CNAME only works inside the same Cloudflare account.
+ *   - any other subdomain: A to the server's public IP, DNS only
+ *   - PR previews (<pr>.<host>): *.<host> A to the server's public IP, DNS only
  *
  * Removing: admins and the Owner remove custom domains directly; members ask the Owner, who approves or
- * rejects the request on the dashboard. Approval removes the domain and the records AvailCoolify created.
+ * rejects the request on the dashboard. The Owner is told which records to delete.
  */
 
 use App\Exceptions\AvailCustomDomainException;
@@ -373,9 +377,9 @@ function availThrowCustomDomainError(?string $error): void
 }
 
 /**
- * Whether a Cloudflare-proxied answer counts as correct DNS for this host. A custom root domain gets an
- * A record that must be DNS only (grey cloud); a custom subdomain is a CNAME to the app's address and
- * is proxied exactly when that address is.
+ * Whether a Cloudflare-proxied answer counts as correct DNS for this host. Only a custom subdomain in a
+ * zone of Avail's Cloudflare account may be proxied (its CNAME follows the app's address); every other
+ * custom domain gets an A record that must be DNS only (grey cloud).
  */
 function availCloudflareProxyAllowed(string $host, ?Server $server): bool
 {
@@ -383,12 +387,72 @@ function availCloudflareProxyAllowed(string $host, ?Server $server): bool
         return true;
     }
 
-    return ! availIsRootDomain($host);
+    return ! availIsRootDomain($host) && availHostInOwnCloudflareZone($host, $server);
 }
 
 function availProxiedCustomDomainMessage(): string
 {
-    return 'This root domain is proxied by Cloudflare (orange cloud). Its A record must be DNS only: click the cloud next to the record in Cloudflare until it is grey, then check again.';
+    return 'This domain is proxied by Cloudflare (orange cloud). Its A record must be DNS only: click the cloud next to the record in Cloudflare until it is grey, then check again.';
+}
+
+// --- Zones in Avail's Cloudflare account -----------------------------------------------------------
+
+/**
+ * Zone names from the Owner's list (comma, space or newline separated), lowercased, without duplicates.
+ *
+ * @return list<string>
+ */
+function availParseCloudflareZones(?string $value): array
+{
+    return collect(preg_split('/[\s,]+/', strtolower((string) $value)) ?: [])
+        ->map(fn (string $zone) => trim($zone, '.'))
+        ->filter(fn (string $zone) => $zone !== '')
+        ->unique()
+        ->values()
+        ->all();
+}
+
+/**
+ * The first entry that is not a domain name (e.g. a URL or a typo), or null.
+ *
+ * @param  list<string>  $zones
+ */
+function availInvalidCloudflareZone(array $zones): ?string
+{
+    foreach ($zones as $zone) {
+        if (strlen($zone) > 253 || ! preg_match('/^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{0,61}[a-z0-9]$/', $zone)) {
+            return $zone;
+        }
+    }
+
+    return null;
+}
+
+/**
+ * Zones in Avail's Cloudflare account: the Owner's list (Settings -> General) plus the zone of the
+ * server's wildcard domain, which is there anyway.
+ *
+ * @return list<string>
+ */
+function availOwnCloudflareZones(?Server $server): array
+{
+    try {
+        $zones = availParseCloudflareZones(\App\Models\InstanceSettings::query()->whereKey(0)->value('avail_cloudflare_zones'));
+    } catch (\Throwable) {
+        $zones = [];
+    }
+    $wildcardHost = availWildcardHost($server);
+    if ($wildcardHost !== null) {
+        $zones[] = availDnsZoneFor($wildcardHost)['zone'];
+    }
+
+    return array_values(array_unique($zones));
+}
+
+/** Whether a host's DNS zone is in Avail's Cloudflare account, so it can be a proxied CNAME. */
+function availHostInOwnCloudflareZone(string $host, ?Server $server): bool
+{
+    return in_array(availDnsZoneFor($host)['zone'], availOwnCloudflareZones($server), true);
 }
 
 // --- Public IP for DNS ---------------------------------------------------------------------------
@@ -591,55 +655,38 @@ function availHostIsProxied(string $host): bool
     });
 }
 
-/** The connected Cloudflare zone that creates this host's records automatically, if any. */
-function availAutomaticDnsZone(?int $teamId, string $host): ?\App\Models\DnsProviderZone
-{
-    if ($teamId === null) {
-        return null;
-    }
-    try {
-        $zones = app(\App\Services\Dns\CloudflareDnsProvider::class)->findZones($teamId, ltrim($host, '*.'));
-    } catch (\Throwable) {
-        return null;
-    }
-    if ($zones->count() !== 1) {
-        return null; // none, or the same zone through two tokens: left to the Owner
-    }
-    $zone = $zones->first();
-
-    return $zone->integrationToken?->automaticDnsEnabled() ? $zone : null;
-}
-
 /**
- * The record a custom host needs, as Vercel does it:
- *   - root domain (abc.com): A to the server's public IP, DNS only
- *   - subdomain (test.abc.com): CNAME to the app's own address, proxied exactly when that address is.
- *     A proxied CNAME only works inside the same Cloudflare account, so when the zone isn't connected
- *     and the app's address is proxied, the subdomain falls back to an A record, DNS only.
- * $previews gives the wildcard below the host that its PR previews (<pr>.<host>) need.
+ * The record the Owner adds in Cloudflare for a custom host:
+ *   - subdomain in a zone of Avail's Cloudflare account: CNAME to the app's own address, proxied
+ *     exactly when that address is (a proxied CNAME only works inside the same account)
+ *   - root domain, a subdomain in any other zone, and the PR preview wildcard: A (AAAA) to the server's
+ *     public IP, DNS only
+ * $previews gives the wildcard below the host that its PR previews (<pr>.<host>) need. Null when an A
+ * record is needed and the server has no public IP for DNS. 'reason' says why the type was chosen:
+ * own-zone, root, other-zone or previews.
  *
- * @return array{type: string, name: string, zone: string, fqdn: string, value: string, proxied: bool, proxy: string, ttl: string, purpose: string, zone_guessed: bool, zone_id: ?int, automatic: bool}|null
+ * @return array{type: string, name: string, zone: string, fqdn: string, value: string, proxied: bool, proxy: string, ttl: string, purpose: string, zone_guessed: bool, reason: string}|null
  */
 function availDesiredRecord(Application $application, string $host, bool $previews = false): ?array
 {
+    $server = availApplicationServer($application);
     $zone = availDnsZoneFor($host);
-    $managedZone = availAutomaticDnsZone($application->team()?->id, $host);
     $root = $zone['name'] === '@';
-    $target = $root ? null : availApplicationCnameTarget($application);
-    $targetProxied = $target !== null && availHostIsProxied($target);
-    $useCname = $target !== null && (! $targetProxied || $managedZone !== null);
+    $target = (! $root && ! $previews && availHostInOwnCloudflareZone($host, $server)) ? availApplicationCnameTarget($application) : null;
 
-    if ($useCname) {
+    if ($target !== null) {
         $type = 'CNAME';
         $value = $target;
-        $proxied = $targetProxied;
+        $proxied = availHostIsProxied($target);
+        $reason = 'own-zone';
     } else {
-        $value = availDnsRecordIp(availApplicationServer($application));
+        $value = availDnsRecordIp($server);
         if ($value === null) {
             return null;
         }
         $type = filter_var($value, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) !== false ? 'AAAA' : 'A';
         $proxied = false;
+        $reason = $previews ? 'previews' : ($root ? 'root' : 'other-zone');
     }
     $name = $zone['name'];
     $fqdn = $host;
@@ -651,16 +698,15 @@ function availDesiredRecord(Application $application, string $host, bool $previe
     return [
         'type' => $type,
         'name' => $name,
-        'zone' => $managedZone?->name ?? $zone['zone'],
+        'zone' => $zone['zone'],
         'fqdn' => $fqdn,
         'value' => $value,
         'proxied' => $proxied,
         'proxy' => $proxied ? 'Proxied (orange cloud)' : 'DNS only (grey cloud)',
         'ttl' => 'Auto',
         'purpose' => $previews ? 'PR previews' : 'Domain',
-        'zone_guessed' => $managedZone === null && $zone['guessed'],
-        'zone_id' => $managedZone?->id,
-        'automatic' => $managedZone !== null,
+        'zone_guessed' => $zone['guessed'],
+        'reason' => $reason,
     ];
 }
 
@@ -689,43 +735,20 @@ function availApplicationCloudflareRecords(Application $application, ?array $onl
     return array_values(array_filter($records));
 }
 
-/** Whether AvailCoolify created (and so manages) a DNS record with this name for the app. */
-function availHasManagedRecord(Application $application, string $fqdn): bool
-{
-    return \App\Models\ManagedDnsRecord::query()
-        ->where('name', strtolower($fqdn))
-        ->whereHas('references', fn ($query) => $query->where('resource_type', $application->getMorphClass())->where('resource_id', $application->getKey()))
-        ->exists();
-}
-
 /**
- * Create the records of new custom domains in their connected Cloudflare zone. Records whose zone
- * isn't connected are left for the Owner. Runs in AvailCustomDomainDnsJob.
+ * A line for the Owner when a subdomain got an A record only because its zone isn't listed as one of
+ * Avail's Cloudflare zones, or null.
  *
- * @param  list<string>  $hosts
- * @return list<array<string, mixed>>  each record with status: created, manual, conflict or failed, and a message
+ * @param  list<array<string, mixed>>  $records
  */
-function availProvisionCustomDomainDns(Application $application, array $hosts): array
+function availOtherZoneHint(array $records): ?string
 {
-    $results = [];
-    foreach (availApplicationCloudflareRecords($application, $hosts) as $record) {
-        if (! $record['automatic']) {
-            $results[] = [...$record, 'status' => 'manual', 'message' => 'Add it in Cloudflare.'];
-
-            continue;
-        }
-        try {
-            $zone = \App\Models\DnsProviderZone::with('integrationToken')->findOrFail($record['zone_id']);
-            app(\App\Services\Dns\CloudflareDnsProvider::class)->createRecord($zone, $record['fqdn'], $record['value'], $application, [], $record['proxied']);
-            $results[] = [...$record, 'status' => 'created', 'message' => "Created in Cloudflare ({$zone->integrationToken->name})."];
-        } catch (\App\Exceptions\DnsRecordConflictException $e) {
-            $results[] = [...$record, 'status' => 'conflict', 'message' => "A record already points {$record['fqdn']} at {$e->currentValue}. Change or delete it in Cloudflare."];
-        } catch (\Throwable $e) {
-            $results[] = [...$record, 'status' => 'failed', 'message' => 'Could not be created: '.$e->getMessage()];
-        }
+    $zones = collect($records)->where('reason', 'other-zone')->pluck('zone')->unique()->values();
+    if ($zones->isEmpty()) {
+        return null;
     }
 
-    return $results;
+    return $zones->implode(', ').($zones->count() === 1 ? ' is' : ' are').' not in the Cloudflare zones list (Settings → General), so subdomains there get an A record, DNS only. If the zone is in Avail\'s Cloudflare account, add it to the list to use a CNAME instead.';
 }
 
 // --- Telling the Owner -----------------------------------------------------------------------------
@@ -751,17 +774,9 @@ function availNotifyCustomDomainChange(Application|ServiceApplication $resource,
         if (! $team instanceof Team) {
             return;
         }
-        if ($resource instanceof Application) {
-            // New domains: their records are created (or listed for the Owner) first, then announced.
-            if ($added !== []) {
-                \App\Jobs\AvailCustomDomainDnsJob::dispatch($resource->id, $added)->afterCommit();
-            }
-            if ($removed !== []) {
-                // The PR preview wildcards (*.<host>) AvailCoolify created go with their domain.
-                app(\App\Services\Dns\ManagedDnsRecordCleanup::class)->queueReleaseOfRemovedHostnames(
-                    $resource, array_map(fn ($host) => '*.'.$host, $removed), (int) $team->id,
-                );
-            }
+        if ($resource instanceof Application && $added !== []) {
+            // New domains: their records need DNS lookups, so a queued job works them out and tells the Owner.
+            \App\Jobs\AvailCustomDomainNoticeJob::dispatch($resource->id, $added)->afterCommit();
             $added = [];
         }
         if ($added === [] && $removed === []) {
@@ -807,7 +822,7 @@ function availRequestDomainRemoval(Application $application, string $host, \App\
     return $request;
 }
 
-/** The Owner approves: the domain (and the records AvailCoolify created for it) are removed. */
+/** The Owner approves: the domain is removed (the removal notice lists the records to delete in Cloudflare). */
 function availApproveDomainRemoval(\App\Models\AvailDomainRemovalRequest $request, \App\Models\User $owner): void
 {
     if ($request->status !== 'pending') {
@@ -838,7 +853,6 @@ function availApproveDomainRemoval(\App\Models\AvailDomainRemovalRequest $reques
             $application->custom_labels = base64_encode(implode("\n", generateLabelsApplication($application)));
             $application->save();
         }
-        app(\App\Services\Dns\ManagedDnsRecordCleanup::class)->releaseHostname($application, $host, (int) $request->team_id, true);
     }
     $request->update(['status' => 'approved', 'decided_by' => $owner->id, 'decided_at' => now()]);
     auditLog('ui.application.custom_domain_removal_approved', ['application_uuid' => $application?->uuid, 'host' => $request->host]);
