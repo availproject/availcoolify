@@ -22,9 +22,6 @@ class TeamInvitation extends Model
         'avail_project_ids' => 'array',
         'avail_access_days' => 'integer',
         'avail_access_until' => 'date',
-    ];
-
-    protected $casts = [
         'link' => 'encrypted',
     ];
 
