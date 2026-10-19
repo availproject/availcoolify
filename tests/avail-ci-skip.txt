@@ -120,3 +120,18 @@ tests/Unit/Policies/StandaloneDockerPolicyTest.php :: it denies non\-admin from 
 tests/Unit/Policies/SwarmDockerPolicyTest.php :: it allows admin to create swarm docker   # owner-only since the 2026-10-13 access review; the test expects the old admin/member access or mocks the user
 tests/Unit/Policies/SwarmDockerPolicyTest.php :: it denies non\-admin from creating swarm docker   # owner-only since the 2026-10-13 access review; the test expects the old admin/member access or mocks the user
 tests/Unit/UpdateCoolifyTest.php :: it rejects invalid registry values and does not sync them   # owner-only since the 2026-10-13 access review; the test expects the old admin/member access or mocks the user
+
+# --- Fail on pristine upstream main too (checked 2026-10-19 against main 975048bad) ---------------
+tests/Feature/Ipv6ServerAddressUrlTest.php :: IPv6 server address with data set.*mongodb   # upstream: fails on pristine main 975048bad (checked 2026-10-19), passes on avail 4ca48cb02
+tests/Feature/Ipv6ServerAddressUrlTest.php :: IPv4 server address unchanged with data set.*mongodb   # upstream: fails on pristine main 975048bad (checked 2026-10-19), passes on avail 4ca48cb02
+tests/Feature/RedisUsernameEnvironmentVariableTest.php :: creates one REDIS_USERNAME variable   # upstream: fails on pristine main 975048bad (checked 2026-10-19), passes on avail 4ca48cb02
+tests/Feature/StandaloneSqliteTest.php :: generates a compose file that passes the database files to the image   # upstream: fails on pristine main 975048bad (checked 2026-10-19), passes on avail 4ca48cb02
+tests/Unit/LivewireInternalRedirectTest.php :: deleting or converting page resources with data set.*scheduled task   # upstream: fails on pristine main 975048bad (checked 2026-10-19), passes on avail 4ca48cb02
+
+# --- Avail rules since the 2026-10-19 upstream sync ---------------------------------------------
+tests/Feature/SystemWideGitSourceAuthorizationTest.php :: can still create team\-only sources via api   # owner-only since the 2026-10-13 access review; the test expects the old admin/member access or mocks the user
+tests/Feature/SystemWideGitSourceAuthorizationTest.php :: can still update team\-only sources via api   # owner-only since the 2026-10-13 access review; the test expects the old admin/member access or mocks the user
+tests/Feature/SystemWideGitSourceAuthorizationTest.php :: can create system\-wide sources via api   # owner-only since the 2026-10-13 access review; the test expects the old admin/member access or mocks the user
+tests/Feature/SystemWideGitSourceAuthorizationTest.php :: can make sources system\-wide via api   # owner-only since the 2026-10-13 access review; the test expects the old admin/member access or mocks the user
+tests/Feature/SettingsBackupEmptyStateTest.php :: saving instance backup settings only persists the description   # owner-only since the 2026-10-13 access review; the test expects the old admin/member access or mocks the user
+tests/Feature/GithubAppMultipleInstallationsWebhookTest.php :: falls back to the GitHub App id when no source has the installation id   # Avail never deploys through another installation's source when the installation id is unknown (GitHub connect)
