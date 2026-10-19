@@ -10,8 +10,8 @@ use App\Models\Team;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 /**
- * Avail: new applications get https://<repo>-<6 characters of the uuid>-<environment>.<wildcard>
- * instead of https://<uuid>.<wildcard>; production is "prod" and staging "stag".
+ * Avail: new applications get https://<repo>-<6 characters of the uuid>[-<environment>].<wildcard>
+ * instead of https://<uuid>.<wildcard>; production adds nothing, staging is "stag".
  */
 uses(RefreshDatabase::class);
 
@@ -39,13 +39,13 @@ beforeEach(function () {
     $this->url = fn (Application $app) => availAppUrl($this->server->fresh(), $app);
 });
 
-test('a git app gets repo, six characters of its uuid and the environment', function () {
+test('a production git app gets repo and six characters of its uuid, with no environment suffix', function () {
     $app = ($this->makeApp)(['uuid' => 'al2ft4wfqxyz123456789abc']);
 
-    expect(($this->url)($app))->toBe('https://autobot-al2ft4-prod.apps.example.com');
+    expect(($this->url)($app))->toBe('https://autobot-al2ft4.apps.example.com');
 });
 
-test('production is prod, staging is stag, other environment names are kept', function () {
+test('production adds no suffix, staging is stag, other environment names are kept', function () {
     $staging = ($this->makeApp)(['uuid' => 'aaaaaa111111222222333333'], 'staging');
     $preview = ($this->makeApp)(['uuid' => 'bbbbbb111111222222333333'], 'preview-test');
     $spaced = ($this->makeApp)(['uuid' => 'cccccc111111222222333333'], 'QA Env');
@@ -59,8 +59,8 @@ test('repository URLs and odd characters become a DNS-safe name', function () {
     $https = ($this->makeApp)(['uuid' => 'dddddd111111222222333333', 'git_repository' => 'https://github.com/Owner/My_Repo.git']);
     $ssh = ($this->makeApp)(['uuid' => 'eeeeee111111222222333333', 'git_repository' => 'git@github.com:owner/api.server.git']);
 
-    expect(($this->url)($https))->toBe('https://my-repo-dddddd-prod.apps.example.com')
-        ->and(($this->url)($ssh))->toBe('https://api-server-eeeeee-prod.apps.example.com');
+    expect(($this->url)($https))->toBe('https://my-repo-dddddd.apps.example.com')
+        ->and(($this->url)($ssh))->toBe('https://api-server-eeeeee.apps.example.com');
 });
 
 test('docker image apps use the image name and dockerfile apps drop the random part of their name', function () {
@@ -79,8 +79,17 @@ test('docker image apps use the image name and dockerfile apps drop the random p
         'name' => 'dockerfile-k2j4h5g6f7d8s9a0q1w2e3r4',
     ]);
 
-    expect(($this->url)($image))->toBe('https://my-api-ffffff-prod.apps.example.com')
-        ->and(($this->url)($dockerfile))->toBe('https://dockerfile-gggggg-prod.apps.example.com');
+    expect(($this->url)($image))->toBe('https://my-api-ffffff.apps.example.com')
+        ->and(($this->url)($dockerfile))->toBe('https://dockerfile-gggggg.apps.example.com');
+});
+
+test('a long production repository name is shortened without a suffix', function () {
+    $app = ($this->makeApp)(['uuid' => 'nnnnnn111111222222333333', 'git_repository' => 'org/'.str_repeat('very-long-repository-name-', 4)]);
+
+    $label = explode('.', parse_url(($this->url)($app), PHP_URL_HOST))[0];
+
+    expect(strlen($label))->toBeLessThanOrEqual(63)
+        ->and($label)->toEndWith('-nnnnnn');
 });
 
 test('a long repository name is shortened so the host label stays within 63 characters', function () {
@@ -94,17 +103,17 @@ test('a long repository name is shortened so the host label stays within 63 char
 });
 
 test('a taken host falls back to the next six characters of the uuid', function () {
-    ($this->makeApp)(['uuid' => 'zzzzzz999999888888777777', 'fqdn' => 'https://autobot-iiiiii-prod.apps.example.com']);
+    ($this->makeApp)(['uuid' => 'zzzzzz999999888888777777', 'fqdn' => 'https://autobot-iiiiii.apps.example.com']);
     $app = ($this->makeApp)(['uuid' => 'iiiiiijjjjjjkkkkkkllllll']);
 
-    expect(($this->url)($app))->toBe('https://autobot-jjjjjj-prod.apps.example.com');
+    expect(($this->url)($app))->toBe('https://autobot-jjjjjj.apps.example.com');
 });
 
 test('the app itself does not count as taking its own host', function () {
     $app = ($this->makeApp)(['uuid' => 'mmmmmm111111222222333333']);
-    $app->update(['fqdn' => 'https://autobot-mmmmmm-prod.apps.example.com']);
+    $app->update(['fqdn' => 'https://autobot-mmmmmm.apps.example.com']);
 
-    expect(($this->url)($app->fresh()))->toBe('https://autobot-mmmmmm-prod.apps.example.com');
+    expect(($this->url)($app->fresh()))->toBe('https://autobot-mmmmmm.apps.example.com');
 });
 
 test('the creation flows, the API and the generate buttons use the readable name', function () {
