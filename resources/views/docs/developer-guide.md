@@ -57,7 +57,7 @@ A public repository also works without the GitHub app: **+ New resource** → **
 
 ![Application page with its URL and the Deploy button](/images/developer-guide/app-general.jpg)
 
-**App URLs** are `https://<name>.apps.avail.so` with a real certificate. New apps get `<repo>-<6 characters>-<environment>`, for example `https://nexus-fast-bridge-p5zgek-prod.apps.avail.so` (`prod` for production, `stag` for staging). You can rename your app's address under **Domains** (then redeploy) to any free `https://<name>.apps.avail.so`: one name of letters, digits and dashes, not used by another app. Other domains need an admin.
+**App URLs** are `https://<name>.apps.avail.so` with a real certificate. New apps get `<repo>-<6 characters>` in production, for example `https://nexus-fast-bridge-p5zgek.apps.avail.so`, and `<repo>-<6 characters>-<environment>` in other environments (`stag` for staging, e.g. `https://nexus-fast-bridge-p5zgek-stag.apps.avail.so`). You can rename your app's address under **Domains** (then redeploy) to any free `https://<name>.apps.avail.so`: one name of letters, digits and dashes, not used by another app. Other domains need an admin.
 
 **App owner:** the **App Owner** column in an environment's resource list and in the dashboard's deployment tables shows who created each app. Use **Filter → App Owners** to see only one person's apps. Databases, services and apps created before owners were recorded show `-`.
 
@@ -72,7 +72,7 @@ A public repository also works without the GitHub app: **+ New resource** → **
 Every pull request gets its own private preview URL, behind a Clerk login that only lets members of the team in (and guests who have that project).
 
 1. **Open a PR** against the app's repo. AvailCoolify builds the PR branch, comments on the PR with the preview link, and adds an **AvailCoolify preview** check that turns green ("Preview ready") when it's up.
-2. **Preview URL:** `https://<PR number>.<app address>`, e.g. PR 7 → `https://7.nexus-fast-bridge-p5zgek-prod.apps.avail.so`.
+2. **Preview URL:** `https://<PR number>.<app address>`, e.g. PR 7 → `https://7.nexus-fast-bridge-p5zgek.apps.avail.so`.
 3. **Push more commits** to the PR: the preview rebuilds.
 4. **Close or merge the PR:** the preview is removed.
 
