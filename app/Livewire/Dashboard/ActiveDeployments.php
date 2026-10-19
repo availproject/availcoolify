@@ -36,9 +36,9 @@ class ActiveDeployments extends Component
         ];
 
         $baseQuery = ApplicationDeploymentQueue::query()
-            ->with([application.environment.project, application.availCreator:id,name,email])
+            ->with(['application.environment.project', 'application.availCreator:id,name,email'])
             ->ownedByTeam(currentTeam()->id)
-            ->when(availIsGuest(), fn ($query) => $query->whereIn(application_id, Application::ownedByCurrentTeam()->pluck(applications.id)));
+            ->when(availIsGuest(), fn ($query) => $query->whereIn('application_id', Application::ownedByCurrentTeam()->pluck('applications.id')));
 
         $this->activeDeployments = (clone $baseQuery)
             ->whereIn('status', [
