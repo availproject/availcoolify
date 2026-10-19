@@ -553,24 +553,21 @@ class Application extends BaseModel
         }
     }
 
+    /**
+     * Removes the volumes by the names that Coolify stored.
+     */
     public function deleteVolumes()
     {
-        $persistentStorages = $this->persistentStorages()->get() ?? collect();
-        if ($this->build_pack === 'dockercompose') {
-            $server = data_get($this, 'destination.server');
-            // --project-directory instead of cd: a non-root SSH user cannot enter the directory on the Coolify host.
-            instant_remote_process(["docker compose --project-directory {$this->dirOnServer()} down -v"], $server, false);
-        } else {
-            if ($persistentStorages->count() === 0) {
-                return;
+        $persistentStorages = $this->persistentStorages()->get();
+        if ($persistentStorages->isEmpty()) {
+            return;
+        }
+        $server = data_get($this, 'destination.server');
+        foreach ($persistentStorages as $storage) {
+            if ($storage->isSharedWithAnotherResource()) {
+                continue;
             }
-            $server = data_get($this, 'destination.server');
-            foreach ($persistentStorages as $storage) {
-                if ($storage->isSharedWithAnotherResource()) {
-                    continue;
-                }
-                instant_remote_process(['docker volume rm -f '.escapeshellarg($storage->name)], $server, false);
-            }
+            instant_remote_process(['docker volume rm -f '.escapeshellarg($storage->name)], $server, false);
         }
     }
 
@@ -738,7 +735,7 @@ class Application extends BaseModel
 
                     return "{$this->source->html_url}/{$this->git_repository}/tree/{$this->git_branch}{$base_dir}";
                 }
-                $httpsRepository = $this->httpsUrlFromScpStyleGitRepository();
+                $httpsRepository = $this->httpsUrlFromSshGitRepository();
                 if (is_string($httpsRepository)) {
                     if (str($this->git_repository)->contains('bitbucket')) {
                         return "{$httpsRepository}/src/{$this->git_branch}{$base_dir}";
@@ -759,7 +756,7 @@ class Application extends BaseModel
                 if (! is_null($this->source?->html_url) && ! is_null($this->git_repository) && ! is_null($this->git_branch)) {
                     return "{$this->source->html_url}/{$this->git_repository}/settings/hooks";
                 }
-                $httpsRepository = $this->httpsUrlFromScpStyleGitRepository();
+                $httpsRepository = $this->httpsUrlFromSshGitRepository();
                 if (is_string($httpsRepository)) {
                     return "{$httpsRepository}/settings/hooks";
                 }
@@ -776,7 +773,7 @@ class Application extends BaseModel
                 if (! is_null($this->source?->html_url) && ! is_null($this->git_repository) && ! is_null($this->git_branch)) {
                     return "{$this->source->html_url}/{$this->git_repository}/commits/{$this->git_branch}";
                 }
-                $httpsRepository = $this->httpsUrlFromScpStyleGitRepository();
+                $httpsRepository = $this->httpsUrlFromSshGitRepository();
                 if (is_string($httpsRepository)) {
                     return "{$httpsRepository}/commits/{$this->git_branch}";
                 }
@@ -797,11 +794,9 @@ class Application extends BaseModel
         }
 
         $git_repository = $this->git_repository;
-        $httpsRepository = scpStyleGitUrlToHttps($git_repository);
+        $httpsRepository = sshGitUrlToHttps($git_repository);
         if (is_string($httpsRepository)) {
             $git_repository = $httpsRepository;
-        } elseif (str($this->git_repository)->startsWith('ssh://')) {
-            $git_repository = 'https://'.parse_url($git_repository, PHP_URL_HOST).parse_url($git_repository, PHP_URL_PATH);
         }
 
         if (! filter_var($git_repository, FILTER_VALIDATE_URL) || ! in_array(parse_url($git_repository, PHP_URL_SCHEME), ['http', 'https'], true)) {
@@ -816,9 +811,9 @@ class Application extends BaseModel
         return $url->__toString();
     }
 
-    private function httpsUrlFromScpStyleGitRepository(): ?string
+    private function httpsUrlFromSshGitRepository(): ?string
     {
-        $httpsRepository = scpStyleGitUrlToHttps($this->git_repository);
+        $httpsRepository = sshGitUrlToHttps($this->git_repository);
 
         if (! is_string($httpsRepository)) {
             return null;
@@ -980,11 +975,11 @@ class Application extends BaseModel
                     $additional_servers_status = $this->additional_servers->pluck('pivot.status');
                     foreach ($additional_servers_status as $status) {
                         $server_status = str($status)->before(':')->value();
-                        $server_health = str($status)->after(':')->value() ?? 'unhealthy';
+                        $server_health = str($status)->contains(':') ? str($status)->after(':')->value() : null;
                         if ($main_server_status !== $server_status) {
                             $complex_status = 'degraded';
                         }
-                        if ($main_server_health !== $server_health) {
+                        if ($server_health !== null && $main_server_health !== $server_health) {
                             $complex_health = 'unhealthy';
                         }
                     }
@@ -1116,7 +1111,7 @@ class Application extends BaseModel
     {
         return $this->morphMany(EnvironmentVariable::class, 'resourceable')
             ->where('is_preview', false)
-            ->withoutBuildpackControlVariables();
+            ->withoutBuildOnlyBuildpackControlVariables();
     }
 
     public function nixpacks_environment_variables()
@@ -1151,7 +1146,7 @@ class Application extends BaseModel
     {
         return $this->morphMany(EnvironmentVariable::class, 'resourceable')
             ->where('is_preview', true)
-            ->withoutBuildpackControlVariables();
+            ->withoutBuildOnlyBuildpackControlVariables();
     }
 
     public function nixpacks_environment_variables_preview()
@@ -2147,7 +2142,7 @@ class Application extends BaseModel
                             continue;
                         }
                         if ($source->startsWith('.')) {
-                            $source = str($workdir.$source->after('.'));
+                            $source = replaceLocalSource($source, str($workdir));
                         }
                         $mkdirCommand = rawComposeBindMkdirCommand($source->value());
                         if ($mkdirCommand !== null) {

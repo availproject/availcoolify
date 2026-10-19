@@ -63,9 +63,9 @@
                 {{-- Brand (width tracks sidebar) --}}
                 <div class="flex items-center gap-2 h-full shrink-0 border-r border-neutral-200 dark:border-white/[0.06] transition-[width] duration-200"
                     :class="collapsed ? 'w-16 justify-center px-0' : 'w-56 px-4'">
-                    <div class="flex shrink-0 items-baseline gap-1.5 min-w-0">
+                    <div class="flex items-baseline gap-1.5 min-w-0">
                         <a href="/" {{ wireNavigate() }} title="Coolify"
-                            class="flex items-center hover:opacity-80 transition-opacity">
+                            class="flex shrink-0 items-center hover:opacity-80 transition-opacity">
                             <img x-show="collapsed" x-cloak src="/coolify-logo.svg" alt="Coolify"
                                 class="size-5" />
                             <span x-show="!collapsed" class="text-[15px] font-semibold tracking-tight text-black dark:text-white">AvailCoolify</span>
@@ -139,7 +139,7 @@
             {{-- ============ DESKTOP SIDEBAR (below top bar) ============ --}}
             <div class="hidden lg:fixed lg:top-12 lg:bottom-0 lg:left-0 lg:z-40 lg:flex lg:flex-col min-w-0"
                 :class="[collapsed ? 'lg:w-16' : 'lg:w-56', sidebarReady ? 'transition-[width] duration-200' : '']">
-                <div class="flex grow min-w-0 min-h-0 flex-col overflow-visible">
+                <div class="flex min-h-0 grow min-w-0 flex-col overflow-visible">
                     <x-navbar deployments-indicator />
                 </div>
             </div>

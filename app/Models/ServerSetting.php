@@ -182,6 +182,7 @@ class ServerSetting extends Model
         'is_geoip_enabled' => 'boolean',
         'geoip_refresh_days' => 'integer',
         'geoip_maxmind_license_key' => 'encrypted',
+        'logdrain_custom_config' => 'encrypted',
         'traffic_ip_mode' => TrafficIpMode::class,
         'docker_version_checked_at' => 'datetime',
         'compose_version_checked_at' => 'datetime',
@@ -319,7 +320,9 @@ class ServerSetting extends Model
     {
         $url = $this->sentinel_custom_url;
 
-        if ($this->server->isLocalhost() && $url === 'http://host.docker.internal:8000') {
+        // The local Sentinel runs on the coolify network. A host gateway URL leaves that network
+        // through the host INPUT chain, where host firewalls such as UFW drop it.
+        if ($this->server->isLocalhost() && strtolower((string) parse_url((string) $url, PHP_URL_HOST)) === 'host.docker.internal') {
             $url = null;
         }
 

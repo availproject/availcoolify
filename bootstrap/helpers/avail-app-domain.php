@@ -3,11 +3,11 @@
 /*
  * Avail: readable application URLs. A new application gets
  *
- *   https://<repo>-<6 characters of its uuid>-<environment>.<server wildcard domain>
+ *   https://<repo>-<6 characters of its uuid>[-<environment>].<server wildcard domain>
  *
- * e.g. https://autobot-al2ft4-stag.apps.avail.so instead of upstream's https://<uuid>.<wildcard>.
- * "production" becomes "prod" and "staging" becomes "stag"; other environment names are used as they
- * are. Docker image apps use the image name, apps without a repository use their own name. If the host
+ * e.g. https://autobot-al2ft4.apps.avail.so (production) or https://autobot-al2ft4-stag.apps.avail.so
+ * instead of upstream's https://<uuid>.<wildcard>. "production" adds nothing and "staging" becomes
+ * "stag"; other environment names are used as they are. Docker image apps use the image name, apps without a repository use their own name. If the host
  * is taken, the next 6 characters of the uuid are used. Compose apps and one-click services keep
  * upstream's naming.
  */
@@ -85,7 +85,7 @@ function availAppUrlEnvironment(Application $application): string
     $name = strtolower(trim((string) data_get($application, 'environment.name')));
 
     return match ($name) {
-        'production' => 'prod',
+        'production' => '',
         'staging' => 'stag',
         default => availUrlSlug($name),
     };

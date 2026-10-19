@@ -348,16 +348,6 @@
                         databaseWebsiteUrl(database) {
                             return this.databaseLinks[database.id]?.website;
                         },
-                        serviceWebsiteUrl(service) {
-                            const source = service.website || service.homepage || service.documentation;
-                            if (!source) return null;
-
-                            try {
-                                return new URL(source).origin;
-                            } catch (error) {
-                                return null;
-                            }
-                        },
                         async checkUrlExists(url) {
                             if (!url) return false;
                             try {

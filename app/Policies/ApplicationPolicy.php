@@ -157,16 +157,6 @@ class ApplicationPolicy
     }
 
     /**
-     * Determine whether the user can manage deployments.
-     */
-    public function manageDeployments(User $user, Application $application): bool
-    {
-        $teamId = $this->getTeamId($application);
-
-        return $teamId !== null && $user->isAdminOfTeam($teamId);
-    }
-
-    /**
      * Determine whether the user can manage environment variables.
      */
     public function manageEnvironment(User $user, Application $application): bool
@@ -175,14 +165,6 @@ class ApplicationPolicy
 
         // Avail: members manage the environment variables of applications they created.
         return $teamId !== null && ($user->isAdminOfTeam($teamId) || availOwnsApplication($user, $application));
-    }
-
-    /**
-     * Determine whether the user can cleanup deployment queue.
-     */
-    public function cleanupDeploymentQueue(User $user): bool
-    {
-        return $user->isAdmin();
     }
 
     private function getTeamId(Application $application): ?int

@@ -224,7 +224,7 @@
                                 @if ($this->application->is_github_based() && !$this->application->is_public_repository())
                                     <div class="pt-4">
                                         <x-forms.textarea
-                                            helper="Order-based pattern matching to filter Git webhook deployments. Supports wildcards (*, **, ?) and negation (!). Last matching pattern wins."
+                                            helper="Order-based pattern matching to filter Git webhook deployments. Enter one pattern per line. Commas do not separate patterns. Supports wildcards (*, **, ?) and negation (!). Last matching pattern wins."
                                             placeholder="services/api/**" id="watchPaths" label="Watch paths"
                                             x-bind:disabled="shouldDisableBasic()" />
                                     </div>
@@ -280,7 +280,7 @@
                             @if ($this->application->is_github_based() && !$this->application->is_public_repository())
                                 <div class="pb-4">
                                     <x-forms.textarea
-                                        helper="Order-based pattern matching to filter Git webhook deployments. Supports wildcards (*, **, ?) and negation (!). Last matching pattern wins."
+                                        helper="Order-based pattern matching to filter Git webhook deployments. Enter one pattern per line. Commas do not separate patterns. Supports wildcards (*, **, ?) and negation (!). Last matching pattern wins."
                                         placeholder="src/pages/**" id="watchPaths" label="Watch paths"
                                         x-bind:disabled="!canConfigure" />
                                 </div>
