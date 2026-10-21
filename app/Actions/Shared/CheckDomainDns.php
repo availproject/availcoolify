@@ -67,6 +67,9 @@ class CheckDomainDns
 
         $type = dnsRecordTypeForIp($expectedIp) === 'AAAA' ? DNSTypes::NAME_AAAA : DNSTypes::NAME_A;
         $receivedAddressRecord = false;
+        // Avail: custom domains must be DNS only, so a Cloudflare-proxied answer is wrong for them.
+        $proxyAllowed = availCloudflareProxyAllowed($host, $server);
+        $proxied = false;
 
         foreach ($dnsServers as $dnsServer) {
             $remainingNanoseconds = $deadline - hrtime(true);
@@ -87,7 +90,8 @@ class CheckDomainDns
                     }
 
                     $receivedAddressRecord = true;
-                    if (isCloudflareIp($record->getData()) || ($expectedIp && DnsRecordHints::sameAddress($record->getData(), $expectedIp))) {
+                    $proxied = $proxied || isCloudflareIp($record->getData());
+                    if (($proxyAllowed && isCloudflareIp($record->getData())) || ($expectedIp && DnsRecordHints::sameAddress($record->getData(), $expectedIp))) {
                         return $this->result('ok', $this->successMessage($server, $expectedIp), $expectedIp);
                     }
                 }
@@ -98,10 +102,19 @@ class CheckDomainDns
 
         if (! $receivedAddressRecord && hrtime(true) < $deadline) {
             foreach ($this->resolveWithSystemDns($host, $type) as $resolvedIp) {
-                if (isCloudflareIp($resolvedIp) || ($expectedIp && DnsRecordHints::sameAddress($resolvedIp, $expectedIp))) {
+                $proxied = $proxied || isCloudflareIp($resolvedIp);
+                if (($proxyAllowed && isCloudflareIp($resolvedIp)) || ($expectedIp && DnsRecordHints::sameAddress($resolvedIp, $expectedIp))) {
                     return $this->result('ok', $this->successMessage($server, $expectedIp), $expectedIp);
                 }
             }
+        }
+
+        if ($proxied && ! $proxyAllowed) {
+            return $this->result('failed', availProxiedCustomDomainMessage(), $expectedIp);
+        }
+        // Avail: a custom subdomain in one of Avail's Cloudflare zones needs a CNAME to the app's address.
+        if (availCustomDomainRulesEnabled() && availIsCustomDomainHost($host, availWildcardHost($server)) && ! availIsRootDomain($host) && availHostInOwnCloudflareZone($host, $server)) {
+            return $this->result('failed', 'Not pointing here yet. Add the CNAME record shown under DNS entries.', $expectedIp);
         }
 
         return $this->result('failed', dnsMismatchGuidanceMessage($expectedIp, $expectedIp), $expectedIp);

@@ -208,7 +208,7 @@ function availGuardApplicationChanges(\App\Models\Application $application): voi
     }
 
     if ($application->isDirty('fqdn')) {
-        $error = availMemberDomainError($application, $application->fqdn);
+        $error = availMemberDomainError($application, $application->fqdn) ?? availCustomDomainRemovalError($application);
         if ($error !== null) {
             availDiscardApplicationChanges($application);
             throw new \RuntimeException($error);
@@ -244,8 +244,9 @@ function availMemberDomainError(\App\Models\Application $application, ?string $f
     }
 
     $urls = collect(explode(',', (string) $fqdn))->map(fn ($url) => trim($url))->filter()->values();
-    if ($urls->count() > 3) {
-        return 'Use at most 3 addresses.';
+    // Avail: room for the app's own address plus a custom domain and its www. pair, and one more.
+    if ($urls->count() > 5) {
+        return 'Use at most 5 addresses.';
     }
 
     $example = "https://my-app.{$wildcardHost}";
@@ -258,7 +259,24 @@ function availMemberDomainError(\App\Models\Application $application, ?string $f
             return "Use an address like {$example}.";
         }
         if (! str_ends_with($host, '.'.$wildcardHost)) {
-            return "Only admins can use addresses outside {$wildcardHost}. Use one like {$example}.";
+            // Avail: a custom domain, on the member's own Git app in production (availApplicationCustomDomainError).
+            if (! availCustomDomainRulesEnabled()) {
+                return "Only admins can use addresses outside {$wildcardHost}. Use one like {$example}.";
+            }
+            if ($ruleError = availApplicationCustomDomainRuleError($application)) {
+                return $ruleError;
+            }
+            if (preg_match('/^(?=.{1,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/', $host) !== 1) {
+                return "{$host} is not a valid domain name.";
+            }
+            if ($host === availUrlHost(instanceSettings()->fqdn)) {
+                return "{$host} is the dashboard's address. Pick another domain.";
+            }
+            if (availHostUsedElsewhere($host, $application)) {
+                return "{$host} is already used by another app. Pick another domain.";
+            }
+
+            continue;
         }
         $label = substr($host, 0, -strlen('.'.$wildcardHost));
         if (preg_match('/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/', $label) !== 1) {

@@ -59,6 +59,7 @@ class InstanceSettings extends Model
         'avatar_s3_storage_id',
         'image_cdn_url',
         'is_dashboard_force_https_enabled',
+        'avail_cloudflare_zones',
     ];
 
     protected $hidden = [

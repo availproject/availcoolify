@@ -107,6 +107,18 @@
 @php
     $dnsHints = $this->dnsRecordHints();
     $dnsCopyText = $this->dnsRecordsCopyText();
+    // Avail: custom domains get the Cloudflare records the Owner adds by hand (CNAME for a subdomain in one
+    // of Avail's Cloudflare zones, A otherwise), instead of the generic list.
+    $availCustomMode = availCustomDomainRulesEnabled() && method_exists($this, 'availCloudflareRecords');
+    $availRecords = $availCustomMode ? $this->availCloudflareRecords() : [];
+    $availOtherZoneHint = availOtherZoneHint($availRecords);
+    $availPendingCustomHosts = [];
+    if ($availCustomMode) {
+        $availPendingCustomHosts = $this->availPendingCustomHosts();
+        $dnsHints = collect($dnsHints)->reject(fn (array $record) => in_array($record['name'], $availPendingCustomHosts, true))->values()->all();
+        $dnsCopyText = \App\Support\DnsRecordHints::toCopyText($dnsHints);
+    }
+    $availCopyText = collect($availRecords)->map(fn (array $r) => "{$r['type']}  {$r['name']}  {$r['value']}  (zone {$r['zone']}, {$r['proxy']})")->implode("\n");
 @endphp
 <div
     x-data="{
@@ -161,7 +173,83 @@
                             Type / Name / Value records so traffic reaches this server.
                         </p>
 
-                        @if (blank($serverIp) && count($dnsHints) === 0)
+                        @if ($availCustomMode && ($availRecords !== [] || $availPendingCustomHosts !== []))
+                            <div class="flex flex-col gap-3" data-avail-cloudflare-records>
+                                @if ($availRecords !== [])
+                                    <x-callout type="warning" title="Owner action needed">
+                                        AvailCoolify has no Cloudflare access, so the Owner adds
+                                        {{ count($availRecords) === 1 ? 'this record' : 'these records' }} by hand in Cloudflare.
+                                        The Owner also gets a notice with them.
+                                    </x-callout>
+                                @endif
+                                @if ($availRecords === [])
+                                    <x-callout type="danger" title="No public IP for DNS">
+                                        This server is reached over a private address, so the IP for the record isn&#39;t known yet.
+                                        The Owner sets it in Servers → {{ $this->application->destination?->server?->name ?? 'the server' }} → Public IP for DNS.
+                                    </x-callout>
+                                @else
+                                    <div class="overflow-x-auto rounded-md border border-neutral-200 dark:border-coolgray-300">
+                                        <table class="w-full min-w-[34rem] text-left text-sm">
+                                            <thead
+                                                class="bg-neutral-50 text-[12px] uppercase tracking-wide text-neutral-500 dark:bg-coolgray-100 dark:text-fg-dim">
+                                                <tr>
+                                                    <th class="px-3 py-2 font-medium">Type</th>
+                                                    <th class="px-3 py-2 font-medium">Name</th>
+                                                    <th class="px-3 py-2 font-medium">Target / IP address</th>
+                                                    <th class="px-3 py-2 font-medium">Proxy status</th>
+                                                    <th class="px-3 py-2 font-medium">TTL</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody class="divide-y divide-neutral-200 dark:divide-coolgray-300">
+                                                @foreach ($availRecords as $record)
+                                                    <tr class="text-[13px] text-black dark:text-fg" wire:key="avail-cf-{{ $record['fqdn'] }}">
+                                                        <td class="px-3 py-2.5">{{ $record['type'] }}</td>
+                                                        <td class="px-3 py-2.5">
+                                                            @include('livewire.project.shared.partials.dns-copy-cell', [
+                                                                'text' => $record['name'],
+                                                                'label' => 'Copy name',
+                                                                'break' => true,
+                                                            ])
+                                                            <div class="text-[12px] text-neutral-500 dark:text-fg-dim">
+                                                                zone {{ $record['zone'] }}@if ($record['zone_guessed']) (check the zone name)@endif
+                                                                @if ($record['purpose'] === 'PR previews') · for PR previews @endif
+                                                            </div>
+                                                        </td>
+                                                        <td class="px-3 py-2.5">
+                                                            @include('livewire.project.shared.partials.dns-copy-cell', [
+                                                                'text' => $record['value'],
+                                                                'label' => $record['type'] === 'CNAME' ? 'Copy target' : 'Copy IP address',
+                                                                'break' => true,
+                                                            ])
+                                                        </td>
+                                                        <td class="px-3 py-2.5 whitespace-nowrap">{{ $record['proxy'] }}</td>
+                                                        <td class="px-3 py-2.5 whitespace-nowrap">{{ $record['ttl'] }}</td>
+                                                    </tr>
+                                                @endforeach
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    @if ($availOtherZoneHint)
+                                        <p class="text-[13px] leading-6 text-neutral-600 dark:text-fg-dim" data-avail-other-zone>{{ $availOtherZoneHint }}</p>
+                                    @endif
+                                    <ol class="list-decimal space-y-1 pl-5 text-[13px] leading-6 text-neutral-600 dark:text-fg-dim">
+                                        <li>Cloudflare → the zone above → DNS → Records → Add record.</li>
+                                        <li>Pick the type, paste the name and target, set the proxy status shown, TTL Auto.</li>
+                                        <li>Save, then press Recheck here and redeploy the app. The HTTPS certificate follows automatically.</li>
+                                    </ol>
+                                    <div class="flex justify-end">
+                                        <button type="button" class="button shrink-0" title="Copy the records to add" x-data="copyButton"
+                                            @click.prevent="copy(@js($availCopyText))">
+                                            <span x-text="copied ? 'Copied' : 'Copy all'"></span>
+                                        </button>
+                                    </div>
+                                @endif
+                            </div>
+                        @endif
+
+                        @if ($availCustomMode && ($availRecords !== [] || $availPendingCustomHosts !== []) && count($dnsHints) === 0)
+                            {{-- Only custom domains are pending: the card above covers them. --}}
+                        @elseif (blank($serverIp) && count($dnsHints) === 0)
                             <x-callout type="warning" title="No server IP">
                                 Could not determine a public IP for this destination. Set the server IP (or instance public IPv4 for localhost) first.
                             </x-callout>

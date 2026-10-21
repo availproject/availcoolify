@@ -3629,6 +3629,24 @@ class ApplicationsController extends Controller
         $isContainerLabelEscapeEnabled = $request->boolean('is_container_label_escape_enabled');
         $isPreserveRepositoryEnabled = $request->boolean('is_preserve_repository_enabled');
         $includeSourceCommitInBuild = $request->boolean('include_source_commit_in_build');
+
+        // Avail: custom domains only on Git-based apps in production. Checked before anything is saved.
+        $availProbe = clone $application;
+        $availProbeData = $request->only($allowedFields);
+        if ($requestHasDomains && $server->isProxyShouldRun()) {
+            data_set($availProbeData, 'fqdn', $domains);
+        }
+        if ($dockerComposeDomainsJson->count() > 0) {
+            data_set($availProbeData, 'docker_compose_domains', json_encode($dockerComposeDomainsJson));
+        }
+        data_forget($availProbeData, 'noindex_domains');
+        if ($customDomainError = availApplicationCustomDomainError($availProbe->fill($availProbeData))) {
+            return response()->json([
+                'message' => $customDomainError,
+                'errors' => ['domains' => [$customDomainError]],
+            ], 422);
+        }
+
         if (isset($useBuildServer)) {
             $application->settings->is_build_server_enabled = $useBuildServer;
             $application->settings->save();

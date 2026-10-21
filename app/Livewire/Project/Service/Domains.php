@@ -270,7 +270,11 @@ class Domains extends Component
         $this->dnsValidationEnabled = (bool) data_get($settings, 'is_dns_validation_enabled', true);
 
         $server = $this->service->server;
-        if ($server) {
+        if ($server && ($publicIp = availServerDnsPublicIp($server))) {
+            // Avail: the Owner-set "Public IP for DNS" (servers reached over a private address).
+            $this->serverIpConfigured = $publicIp;
+            $this->serverIp = $publicIp;
+        } elseif ($server) {
             if ($server->id === 0) {
                 $configured = data_get($settings, 'public_ipv4')
                     ?: data_get($settings, 'public_ipv6')
@@ -1589,6 +1593,13 @@ class Domains extends Component
 
                 return false;
             }
+        }
+
+        // Avail: services never get custom domains (only Git-based apps in production do).
+        if ($customDomainError = availServiceApplicationCustomDomainError($app, $domainString)) {
+            $this->dispatch('error', $customDomainError);
+
+            return false;
         }
 
         $app->fqdn = $domainString;

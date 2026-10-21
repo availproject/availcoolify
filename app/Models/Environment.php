@@ -41,6 +41,10 @@ class Environment extends BaseModel
                 $shared_variable->delete();
             }
         });
+        // Avail: custom domains are only for production, so its apps' custom domains pin the name.
+        static::saving(function ($environment) {
+            availThrowCustomDomainError(availEnvironmentRenameError($environment));
+        });
     }
 
     public static function ownedByCurrentTeam()

@@ -378,6 +378,8 @@ function clone_application(Application $source, $destination, array $overrides =
         'destination_id' => $destination->id,
         'destination_type' => $destination->getMorphClass(),
     ], $overrides));
+    // Avail: a clone outside production (or of a non-Git app) can't keep custom domains.
+    availDropDisallowedCustomDomains($newApplication);
     $newApplication->save();
 
     // Update custom labels if needed
