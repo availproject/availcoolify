@@ -55,6 +55,7 @@ class ApplicationsController extends Controller
         'docker_images_to_keep',
         'is_gzip_enabled',
         'is_stripprefix_enabled',
+        'is_permanent_redirect_enabled',
         'traefik_certificate_resolver',
         'is_raw_compose_deployment_enabled',
         'is_log_drain_enabled',
@@ -79,6 +80,7 @@ class ApplicationsController extends Controller
         'is_pr_deployments_public_enabled',
         'is_gzip_enabled',
         'is_stripprefix_enabled',
+        'is_permanent_redirect_enabled',
         'is_raw_compose_deployment_enabled',
         'is_log_drain_enabled',
         'is_gpu_enabled',
@@ -229,6 +231,7 @@ class ApplicationsController extends Controller
             && $application->settings->is_container_label_readonly_enabled
             && (array_key_exists('is_gzip_enabled', $settings)
                 || array_key_exists('is_stripprefix_enabled', $settings)
+                || array_key_exists('is_permanent_redirect_enabled', $settings)
                 || array_key_exists('traefik_certificate_resolver', $settings));
 
         $application->settings->fill($settings)->save();
@@ -237,6 +240,11 @@ class ApplicationsController extends Controller
             $application->custom_labels = str(implode('|coolify|', generateLabelsApplication($application)))->replace('|coolify|', "\n");
             $application->save();
         }
+    }
+
+    private function extraApplicationFieldMessage(string $field): string
+    {
+        return $field === 'fqdn' ? 'Use the domains field to set application URLs.' : 'This field is not allowed.';
     }
 
     /**
@@ -449,6 +457,7 @@ class ApplicationsController extends Controller
                             'docker_images_to_keep' => ['type' => 'integer', 'minimum' => 0, 'maximum' => 100, 'description' => 'Number of Docker images to retain.'],
                             'is_gzip_enabled' => ['type' => 'boolean', 'description' => 'Enable gzip compression.'],
                             'is_stripprefix_enabled' => ['type' => 'boolean', 'description' => 'Enable path prefix stripping.'],
+                            'is_permanent_redirect_enabled' => ['type' => 'boolean', 'description' => 'Use permanent redirects (301/308) instead of temporary (302/307) for the HTTP to HTTPS and www redirects. Defaults to false.'],
                             'traefik_certificate_resolver' => ['type' => 'string', 'nullable' => true, 'description' => 'Traefik certificate resolver for this application. Null uses the server setting, "none" uses no resolver.'],
                             'is_raw_compose_deployment_enabled' => ['type' => 'boolean', 'description' => 'Deploy the raw Docker Compose definition.'],
                             'is_log_drain_enabled' => ['type' => 'boolean', 'description' => 'Enable log drain for the application.'],
@@ -649,6 +658,7 @@ class ApplicationsController extends Controller
                             'docker_images_to_keep' => ['type' => 'integer', 'minimum' => 0, 'maximum' => 100, 'description' => 'Number of Docker images to retain.'],
                             'is_gzip_enabled' => ['type' => 'boolean', 'description' => 'Enable gzip compression.'],
                             'is_stripprefix_enabled' => ['type' => 'boolean', 'description' => 'Enable path prefix stripping.'],
+                            'is_permanent_redirect_enabled' => ['type' => 'boolean', 'description' => 'Use permanent redirects (301/308) instead of temporary (302/307) for the HTTP to HTTPS and www redirects. Defaults to false.'],
                             'traefik_certificate_resolver' => ['type' => 'string', 'nullable' => true, 'description' => 'Traefik certificate resolver for this application. Null uses the server setting, "none" uses no resolver.'],
                             'is_raw_compose_deployment_enabled' => ['type' => 'boolean', 'description' => 'Deploy the raw Docker Compose definition.'],
                             'is_log_drain_enabled' => ['type' => 'boolean', 'description' => 'Enable log drain for the application.'],
@@ -849,6 +859,7 @@ class ApplicationsController extends Controller
                             'docker_images_to_keep' => ['type' => 'integer', 'minimum' => 0, 'maximum' => 100, 'description' => 'Number of Docker images to retain.'],
                             'is_gzip_enabled' => ['type' => 'boolean', 'description' => 'Enable gzip compression.'],
                             'is_stripprefix_enabled' => ['type' => 'boolean', 'description' => 'Enable path prefix stripping.'],
+                            'is_permanent_redirect_enabled' => ['type' => 'boolean', 'description' => 'Use permanent redirects (301/308) instead of temporary (302/307) for the HTTP to HTTPS and www redirects. Defaults to false.'],
                             'traefik_certificate_resolver' => ['type' => 'string', 'nullable' => true, 'description' => 'Traefik certificate resolver for this application. Null uses the server setting, "none" uses no resolver.'],
                             'is_raw_compose_deployment_enabled' => ['type' => 'boolean', 'description' => 'Deploy the raw Docker Compose definition.'],
                             'is_log_drain_enabled' => ['type' => 'boolean', 'description' => 'Enable log drain for the application.'],
@@ -1020,6 +1031,7 @@ class ApplicationsController extends Controller
                             'docker_images_to_keep' => ['type' => 'integer', 'minimum' => 0, 'maximum' => 100, 'description' => 'Number of Docker images to retain.'],
                             'is_gzip_enabled' => ['type' => 'boolean', 'description' => 'Enable gzip compression.'],
                             'is_stripprefix_enabled' => ['type' => 'boolean', 'description' => 'Enable path prefix stripping.'],
+                            'is_permanent_redirect_enabled' => ['type' => 'boolean', 'description' => 'Use permanent redirects (301/308) instead of temporary (302/307) for the HTTP to HTTPS and www redirects. Defaults to false.'],
                             'traefik_certificate_resolver' => ['type' => 'string', 'nullable' => true, 'description' => 'Traefik certificate resolver for this application. Null uses the server setting, "none" uses no resolver.'],
                             'is_raw_compose_deployment_enabled' => ['type' => 'boolean', 'description' => 'Deploy the raw Docker Compose definition.'],
                             'is_log_drain_enabled' => ['type' => 'boolean', 'description' => 'Enable log drain for the application.'],
@@ -1187,6 +1199,7 @@ class ApplicationsController extends Controller
                             'docker_images_to_keep' => ['type' => 'integer', 'minimum' => 0, 'maximum' => 100, 'description' => 'Number of Docker images to retain.'],
                             'is_gzip_enabled' => ['type' => 'boolean', 'description' => 'Enable gzip compression.'],
                             'is_stripprefix_enabled' => ['type' => 'boolean', 'description' => 'Enable path prefix stripping.'],
+                            'is_permanent_redirect_enabled' => ['type' => 'boolean', 'description' => 'Use permanent redirects (301/308) instead of temporary (302/307) for the HTTP to HTTPS and www redirects. Defaults to false.'],
                             'traefik_certificate_resolver' => ['type' => 'string', 'nullable' => true, 'description' => 'Traefik certificate resolver for this application. Null uses the server setting, "none" uses no resolver.'],
                             'is_raw_compose_deployment_enabled' => ['type' => 'boolean', 'description' => 'Deploy the raw Docker Compose definition.'],
                             'is_log_drain_enabled' => ['type' => 'boolean', 'description' => 'Enable log drain for the application.'],
@@ -1315,7 +1328,7 @@ class ApplicationsController extends Controller
             $errors = $validator->errors();
             if (! empty($extraFields)) {
                 foreach ($extraFields as $field) {
-                    $errors->add($field, 'This field is not allowed.');
+                    $errors->add($field, $this->extraApplicationFieldMessage($field));
                 }
             }
 
@@ -3194,6 +3207,7 @@ class ApplicationsController extends Controller
                             'docker_images_to_keep' => ['type' => 'integer', 'minimum' => 0, 'maximum' => 100, 'description' => 'Number of Docker images to retain.'],
                             'is_gzip_enabled' => ['type' => 'boolean', 'description' => 'Enable gzip compression.'],
                             'is_stripprefix_enabled' => ['type' => 'boolean', 'description' => 'Enable path prefix stripping.'],
+                            'is_permanent_redirect_enabled' => ['type' => 'boolean', 'description' => 'Use permanent redirects (301/308) instead of temporary (302/307) for the HTTP to HTTPS and www redirects. Defaults to false.'],
                             'traefik_certificate_resolver' => ['type' => 'string', 'nullable' => true, 'description' => 'Traefik certificate resolver for this application. Null uses the server setting, "none" uses no resolver.'],
                             'is_raw_compose_deployment_enabled' => ['type' => 'boolean', 'description' => 'Deploy the raw Docker Compose definition.'],
                             'is_log_drain_enabled' => ['type' => 'boolean', 'description' => 'Enable log drain for the application.'],
@@ -3401,7 +3415,7 @@ class ApplicationsController extends Controller
             $errors = $validator->errors();
             if (! empty($extraFields)) {
                 foreach ($extraFields as $field) {
-                    $errors->add($field, 'This field is not allowed.');
+                    $errors->add($field, $this->extraApplicationFieldMessage($field));
                 }
             }
 
