@@ -10,9 +10,11 @@ $s6 = fn (string $path) => base_path('docker/production/etc/s6-overlay/'.$path);
 $services = ['db-migration', 'horizon', 'init-script', 'init-seeder', 'reverb', 'scheduler-worker', 'terminal-server'];
 
 it('lists every production service where the pinned base image looks for it', function () use ($s6, $services) {
-    preg_match('/^ARG SERVERSIDEUP_PHP_VERSION=(\S+)$/m', file_get_contents(base_path('docker/production/Dockerfile')), $match);
+    // Upstream names the base image by tag (SERVERSIDEUP_PHP_VERSION) or, for its patched rebuilds such as
+    // ghcr.io/coollabsio/serversideup-php:8.4-fpm-nginx-alpine-v4.5.1-hotfix, by full image (SERVERSIDEUP_PHP_IMAGE).
+    preg_match('/^ARG SERVERSIDEUP_PHP_(?:VERSION|IMAGE)=(\S+)$/m', file_get_contents(base_path('docker/production/Dockerfile')), $match);
     $tag = $match[1] ?? '';
-    $isV4 = (bool) preg_match('/-v4\.\d+\.\d+$/', $tag);
+    $isV4 = (bool) preg_match('/-v4\.\d+\.\d+(-[a-z0-9.]+)?$/', $tag);
     $bundle = $isV4 ? 's6-rc.d/user/contents.d' : 'user-bundles.d/user/contents.d';
 
     expect($tag)->not->toBe('');
