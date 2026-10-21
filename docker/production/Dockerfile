@@ -148,6 +148,18 @@ RUN --mount=type=cache,target=/var/cache/apk \
     procps \
     vim
 
+# eMudhra intermediate CA compromise (2026-10-20, we-have-a-problem.com): ca-certificates 20261020-r0 drops
+# the roots that chain to the leaked intermediates. Refresh the index (the apk cache mount above can be stale)
+# and fail the build if an older bundle is installed.
+RUN set -eux; \
+    apk add --no-cache --upgrade ca-certificates ca-certificates-bundle; \
+    v="$(apk info -v 2>/dev/null | sed -n 's/^ca-certificates-bundle-//p')"; \
+    [ "$(apk version -t "$v" 20261020-r0)" != "<" ] || { echo "ca-certificates-bundle $v predates 20261020-r0"; exit 1; }; \
+    update-ca-certificates
+
+# Node ships its own root list (no fix yet); make it use the patched system store instead.
+ENV NODE_USE_SYSTEM_CA=1
+
 # Install PHP extensions
 # uv: Reverb uses an ext-uv event loop instead of stream_select(), which fails at 1024 open files (FD_SETSIZE)
 RUN install-php-extensions uv-${PHP_UV_VERSION}
