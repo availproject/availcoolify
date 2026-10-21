@@ -157,7 +157,7 @@ RUN set -eux; \
     [ "$(apk version -t "$v" 20261020-r0)" != "<" ] || { echo "ca-certificates-bundle $v predates 20261020-r0"; exit 1; }; \
     update-ca-certificates
 
-# Node ships its own root list (no fix yet); make it use the patched system store instead.
+# Node ships its own root list (24.22.1 dropped emSign ECC Root CA - G3); keep it on the patched system store too.
 ENV NODE_USE_SYSTEM_CA=1
 
 # Install PHP extensions
